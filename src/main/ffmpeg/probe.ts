@@ -1,5 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { sep } from 'path'
 import type { ProbeResult } from '../../shared/types'
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -9,12 +10,17 @@ const ffprobeStatic = (require('ffprobe-static') as { path: string }).path
 
 const execFileAsync = promisify(execFile)
 
+// When packaged, asarUnpack copies binaries to app.asar.unpacked — fix the path.
+function unpackedPath(p: string): string {
+  return p.replace('app.asar' + sep, 'app.asar.unpacked' + sep)
+}
+
 export function getFfmpegPath(): string {
-  return ffmpegStatic
+  return unpackedPath(ffmpegStatic)
 }
 
 export function getFfprobePath(): string {
-  return ffprobeStatic
+  return unpackedPath(ffprobeStatic)
 }
 
 export async function probeFile(filePath: string): Promise<ProbeResult> {
