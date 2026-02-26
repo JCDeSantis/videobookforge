@@ -20,8 +20,13 @@ export function getBinDir(): string {
 
 export function getWhisperExe(): string | null {
   const binDir = getBinDir()
-  // The zip extracts into a Release/ subdirectory on Windows
-  const searchDirs = [binDir, join(binDir, 'Release')]
+  // The zip may extract flat or into a subdirectory depending on the release
+  const searchDirs = [
+    binDir,
+    join(binDir, 'Release'),
+    join(binDir, 'whisper-bin-x64'),
+    join(binDir, 'whisper-bin-x64', 'Release'),
+  ]
   for (const dir of searchDirs) {
     for (const name of BINARY_NAMES) {
       const p = join(dir, name)

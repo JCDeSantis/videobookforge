@@ -78,8 +78,10 @@ export async function transcribeAudio(
       })
     }
 
-    // Step 2: Download model if needed
+    // Step 2: Download model if needed (also re-downloads if the file is incomplete)
     if (!isModelDownloaded(model)) {
+      // Remove any partial file from a previous interrupted download before starting fresh
+      await unlink(getModelPath(model)).catch(() => {})
       send(win, { phase: 'downloading-model', percent: 0, message: 'Downloading model...' })
       await downloadModel(model, win)
     }

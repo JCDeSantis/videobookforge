@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, statSync } from 'fs'
 import type { WhisperModel, WhisperModelInfo } from '../../shared/types'
 
 export const WHISPER_MODELS: WhisperModelInfo[] = [
@@ -49,5 +49,17 @@ export function getModelPath(model: WhisperModel): string {
 }
 
 export function isModelDownloaded(model: WhisperModel): boolean {
-  return existsSync(getModelPath(model))
+  const p = getModelPath(model)
+  if (!existsSync(p)) return false
+  // Reject partial downloads — file must be at least 90% of expected size
+  const info = WHISPER_MODELS.find((m) => m.id === model)
+  if (info) {
+    try {
+      const { size } = statSync(p)
+      if (size < info.sizeBytes * 0.9) return false
+    } catch {
+      return false
+    }
+  }
+  return true
 }
