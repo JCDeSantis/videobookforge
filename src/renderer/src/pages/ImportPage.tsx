@@ -38,6 +38,8 @@ export function ImportPage() {
   const [showAiPanel, setShowAiPanel] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState<TranscriptSegment[]>([])
   const unsubRef = useRef<(() => void) | null>(null)
+  // Incremented on each new run — stale callbacks from cancelled runs check this before updating state
+  const genRef = useRef(0)
 
   const isOverlayActive =
     whisperProgress !== null &&
@@ -85,14 +87,20 @@ export function ImportPage() {
   }
 
   async function handleGenerate() {
-    if (!audioFiles.length || isOverlayActive) return
+    if (!audioFiles.length) return
 
-    // Reset live transcript for new run
+    // Cancel any in-flight transcription and its downloads/processes before starting fresh
+    ipc.whisper.cancel()
+    unsubRef.current?.()
+    unsubRef.current = null
+
+    const gen = ++genRef.current
+
     setLiveTranscript([])
     setWhisperProgress({ phase: 'transcribing', percent: 0, message: 'Starting...' })
 
     const unsub = ipc.whisper.onProgress((data: WhisperProgress) => {
-      // Accumulate segment text with its timestamp
+      if (gen !== genRef.current) return // stale callback from a cancelled run
       if (data.text && data.segmentTimestamp) {
         setLiveTranscript((prev) => [...prev, { timestamp: data.segmentTimestamp!, text: data.text! }])
       }
@@ -101,12 +109,12 @@ export function ImportPage() {
     unsubRef.current = unsub
 
     try {
-      // Use the returned srtPath to set done state — don't rely on the done progress event,
-      // which can race with the IPC reply causing unsub() to fire first and the done event to be missed.
       const resultPath = await ipc.whisper.transcribe(whisperModel, audioFiles.map((f) => f.path))
+      if (gen !== genRef.current) return // a newer run started while we were awaiting
       setSrtPath(resultPath)
       setWhisperProgress({ phase: 'done', percent: 100, message: 'Transcription complete!' })
     } catch (err) {
+      if (gen !== genRef.current) return // stale error from a cancelled run — ignore
       setWhisperProgress({
         phase: 'error',
         percent: 0,

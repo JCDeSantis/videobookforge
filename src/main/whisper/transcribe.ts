@@ -14,6 +14,7 @@ import type { WhisperModel, WhisperProgress } from '../../shared/types'
 import { IPC } from '../../shared/types'
 
 let activeProcess: ChildProcess | null = null
+let activeAbortController: AbortController | null = null
 
 function send(win: BrowserWindow, progress: WhisperProgress): void {
   win.webContents.send(IPC.WHISPER_PROGRESS, progress)
@@ -24,7 +25,11 @@ function hhmmssToSeconds(time: string): number {
   return parts[0] * 3600 + parts[1] * 60 + parts[2]
 }
 
-async function downloadModel(model: WhisperModel, win: BrowserWindow): Promise<void> {
+async function downloadModel(
+  model: WhisperModel,
+  win: BrowserWindow,
+  signal?: AbortSignal
+): Promise<void> {
   const modelDir = getModelDir()
   mkdirSync(modelDir, { recursive: true })
 
@@ -34,7 +39,8 @@ async function downloadModel(model: WhisperModel, win: BrowserWindow): Promise<v
   const response = await axios.get(url, {
     responseType: 'stream',
     maxRedirects: 10,
-    headers: { 'User-Agent': 'VideoBookForge' }
+    headers: { 'User-Agent': 'VideoBookForge' },
+    signal
   })
 
   const total = parseInt(response.headers['content-length'] || '0', 10)
@@ -42,6 +48,14 @@ async function downloadModel(model: WhisperModel, win: BrowserWindow): Promise<v
 
   await new Promise<void>((resolve, reject) => {
     const writer = createWriteStream(modelPath)
+
+    const onAbort = (): void => {
+      writer.destroy()
+      unlink(modelPath).catch(() => {})
+      reject(new Error('Cancelled'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+
     response.data.on('data', (chunk: Buffer) => {
       downloaded += chunk.length
       if (total > 0) {
@@ -54,8 +68,17 @@ async function downloadModel(model: WhisperModel, win: BrowserWindow): Promise<v
       }
     })
     response.data.pipe(writer)
-    writer.on('finish', resolve)
+    writer.on('finish', () => {
+      signal?.removeEventListener('abort', onAbort)
+      if (signal?.aborted) {
+        unlink(modelPath).catch(() => {})
+        reject(new Error('Cancelled'))
+      } else {
+        resolve()
+      }
+    })
     writer.on('error', (err) => {
+      signal?.removeEventListener('abort', onAbort)
       unlink(modelPath).catch(() => {})
       reject(err)
     })
@@ -67,6 +90,13 @@ export async function transcribeAudio(
   audioPaths: string[],
   model: WhisperModel
 ): Promise<string> {
+  // Abort any previously running transcription before starting a new one
+  activeAbortController?.abort()
+
+  const abortController = new AbortController()
+  activeAbortController = abortController
+  const { signal } = abortController
+
   let tempDir: string | null = null
 
   try {
@@ -74,17 +104,21 @@ export async function transcribeAudio(
     if (!isBinaryDownloaded()) {
       send(win, { phase: 'downloading-binary', percent: 0, message: 'Downloading whisper.cpp...' })
       await downloadBinary((percent, message) => {
-        send(win, { phase: 'downloading-binary', percent, message })
-      })
+        if (!signal.aborted) send(win, { phase: 'downloading-binary', percent, message })
+      }, signal)
     }
+
+    if (signal.aborted) throw new Error('Cancelled')
 
     // Step 2: Download model if needed (also re-downloads if the file is incomplete)
     if (!isModelDownloaded(model)) {
       // Remove any partial file from a previous interrupted download before starting fresh
       await unlink(getModelPath(model)).catch(() => {})
       send(win, { phase: 'downloading-model', percent: 0, message: 'Downloading model...' })
-      await downloadModel(model, win)
+      await downloadModel(model, win, signal)
     }
+
+    if (signal.aborted) throw new Error('Cancelled')
 
     // Step 3: Concat audio + convert to 16kHz mono WAV (required by whisper.cpp)
     send(win, { phase: 'transcribing', percent: 0, message: 'Preparing audio...' })
@@ -100,13 +134,30 @@ export async function transcribeAudio(
         '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
         '-y', wavPath
       ])
+      activeProcess = proc
+
+      const onAbort = (): void => {
+        proc.kill('SIGTERM')
+        reject(new Error('Cancelled'))
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+
       let errBuf = ''
       proc.stderr?.on('data', (c: Buffer) => { errBuf += c.toString() })
-      proc.on('close', (code) =>
+      proc.on('close', (code) => {
+        signal.removeEventListener('abort', onAbort)
+        activeProcess = null
+        if (signal.aborted) return
         code === 0 ? resolve() : reject(new Error(`Audio prep failed (${code})\n${errBuf.slice(-500)}`))
-      )
-      proc.on('error', reject)
+      })
+      proc.on('error', (err) => {
+        signal.removeEventListener('abort', onAbort)
+        activeProcess = null
+        reject(err)
+      })
     })
+
+    if (signal.aborted) throw new Error('Cancelled')
 
     // Step 4: Run whisper
     const probe = await probeFile(wavPath)
@@ -135,6 +186,12 @@ export async function transcribeAudio(
         cwd: dirname(whisperExe)
       })
       activeProcess = proc
+
+      const onAbort = (): void => {
+        proc.kill('SIGTERM')
+        reject(new Error('Cancelled'))
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
 
       let outputBuf = ''
       let txPercent = 2
@@ -168,10 +225,9 @@ export async function transcribeAudio(
         outputBuf += text
 
         for (const line of text.split('\n')) {
-          // Capture start timestamp + text: group 1 = start ts, group 2 = segment text
           const segMatch = line.match(/\[([\d:.,]+)\s*-->\s*[\d:.,]+\]\s+(.+)/)
           if (segMatch) {
-            const startTs = segMatch[1]  // e.g. "00:02:34.560"
+            const startTs = segMatch[1]
             const segText = segMatch[2].trim()
             if (segText && !seenTimestamps.has(startTs)) {
               seenTimestamps.add(startTs)
@@ -179,7 +235,6 @@ export async function transcribeAudio(
               if (totalDuration > 0) {
                 txPercent = 2 + Math.min(Math.round((elapsed / totalDuration) * 96), 96)
               }
-              // Display timestamp: strip milliseconds → "HH:MM:SS"
               const segmentTimestamp = startTs.replace(/[.,]\d+$/, '')
               send(win, {
                 phase: 'transcribing',
@@ -195,12 +250,15 @@ export async function transcribeAudio(
       })
 
       proc.on('close', (code) => {
+        signal.removeEventListener('abort', onAbort)
         activeProcess = null
+        if (signal.aborted) return
         if (code === 0) resolve()
         else reject(new Error(`Whisper exited with code ${code}\n${outputBuf.slice(-1500)}`))
       })
 
       proc.on('error', (err) => {
+        signal.removeEventListener('abort', onAbort)
         activeProcess = null
         reject(err)
       })
@@ -209,18 +267,27 @@ export async function transcribeAudio(
     send(win, { phase: 'done', percent: 100, message: 'Transcription complete!', srtPath })
     return srtPath
   } catch (err) {
-    send(win, {
-      phase: 'error',
-      percent: 0,
-      errorMessage: err instanceof Error ? err.message : String(err)
-    })
+    // Don't send an error progress event for user-initiated cancellation
+    const isCancelled = signal.aborted || (err instanceof Error && err.message === 'Cancelled')
+    if (!isCancelled) {
+      send(win, {
+        phase: 'error',
+        percent: 0,
+        errorMessage: err instanceof Error ? err.message : String(err)
+      })
+    }
     throw err
   } finally {
+    if (activeAbortController === abortController) {
+      activeAbortController = null
+    }
+    activeProcess = null
     if (tempDir) cleanupTempDir(tempDir)
   }
 }
 
 export function cancelTranscription(): void {
+  activeAbortController?.abort()
   if (activeProcess) {
     activeProcess.kill('SIGTERM')
     activeProcess = null

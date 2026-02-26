@@ -41,7 +41,8 @@ export function isBinaryDownloaded(): boolean {
 }
 
 export async function downloadBinary(
-  onProgress: (percent: number, message: string) => void
+  onProgress: (percent: number, message: string) => void,
+  signal?: AbortSignal
 ): Promise<void> {
   const binDir = getBinDir()
   mkdirSync(binDir, { recursive: true })
@@ -53,7 +54,8 @@ export async function downloadBinary(
   const response = await axios.get(BINARY_URL, {
     responseType: 'stream',
     maxRedirects: 5,
-    headers: { 'User-Agent': 'VideoBookForge' }
+    headers: { 'User-Agent': 'VideoBookForge' },
+    signal
   })
 
   const total = parseInt(response.headers['content-length'] || '0', 10)
@@ -61,6 +63,14 @@ export async function downloadBinary(
 
   await new Promise<void>((resolve, reject) => {
     const writer = createWriteStream(zipPath)
+
+    const onAbort = (): void => {
+      writer.destroy()
+      unlink(zipPath).catch(() => {})
+      reject(new Error('Cancelled'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+
     response.data.on('data', (chunk: Buffer) => {
       downloaded += chunk.length
       if (total > 0) {
@@ -68,9 +78,23 @@ export async function downloadBinary(
       }
     })
     response.data.pipe(writer)
-    writer.on('finish', resolve)
-    writer.on('error', reject)
+    writer.on('finish', () => {
+      signal?.removeEventListener('abort', onAbort)
+      if (signal?.aborted) {
+        unlink(zipPath).catch(() => {})
+        reject(new Error('Cancelled'))
+      } else {
+        resolve()
+      }
+    })
+    writer.on('error', (err) => {
+      signal?.removeEventListener('abort', onAbort)
+      unlink(zipPath).catch(() => {})
+      reject(err)
+    })
   })
+
+  if (signal?.aborted) return
 
   onProgress(72, 'Extracting binary...')
 
