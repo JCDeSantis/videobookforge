@@ -7,7 +7,7 @@ import { FileDropZone } from '@renderer/components/FileDropZone'
 import { FileList } from '@renderer/components/FileList'
 import { Button } from '@renderer/components/ui/button'
 import { TranscriptionOverlay, type TranscriptSegment } from '@renderer/components/TranscriptionOverlay'
-import type { AudioFile, WhisperModel } from '@shared/types'
+import type { AudioFile, WhisperModel, WhisperProgress } from '@shared/types'
 import { WHISPER_MODELS } from '@renderer/lib/whisperModels'
 
 let fileIdCounter = 0
