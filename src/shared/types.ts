@@ -80,6 +80,36 @@ export interface ProbeResult {
   hasCoverArt: boolean
 }
 
+export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium'
+
+export interface WhisperModelInfo {
+  id: WhisperModel
+  name: string
+  size: string
+  sizeBytes: number
+  description: string
+}
+
+export type WhisperPhase =
+  | 'idle'
+  | 'downloading-binary'
+  | 'downloading-model'
+  | 'transcribing'
+  | 'done'
+  | 'error'
+
+export interface WhisperProgress {
+  phase: WhisperPhase
+  percent: number
+  message?: string
+  errorMessage?: string
+  srtPath?: string
+  text?: string             // live transcript segment text
+  segmentTimestamp?: string // "HH:MM:SS" start time for the segment
+  elapsed?: number          // seconds of audio processed so far
+  totalDuration?: number    // total audio duration in seconds
+}
+
 export const IPC = {
   FILES_OPEN_DIALOG: 'files:open-dialog',
   FILES_CHECK_EXISTS: 'files:check-exists',
@@ -91,4 +121,8 @@ export const IPC = {
   CONVERT_START: 'convert:start',
   CONVERT_CANCEL: 'convert:cancel',
   CONVERT_PROGRESS: 'convert:progress',
+  WHISPER_TRANSCRIBE: 'whisper:transcribe',
+  WHISPER_CANCEL: 'whisper:cancel',
+  WHISPER_PROGRESS: 'whisper:progress',
+  WHISPER_CHECK_MODEL: 'whisper:check-model',
 } as const

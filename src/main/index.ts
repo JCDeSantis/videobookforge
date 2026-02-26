@@ -3,6 +3,7 @@ import { join } from 'path'
 import { registerFilesIpc } from './ipc/files.ipc'
 import { registerMetadataIpc } from './ipc/metadata.ipc'
 import { registerConversionIpc } from './ipc/conversion.ipc'
+import { registerWhisperIpc } from './ipc/whisper.ipc'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -12,7 +13,9 @@ function createWindow(): void {
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
+    title: 'VideoBook Forge',
     backgroundColor: '#09090b',
+    icon: join(__dirname, '../../resources/icon.ico'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -41,6 +44,7 @@ app.whenReady().then(() => {
   registerFilesIpc()
   registerMetadataIpc()
   registerConversionIpc()
+  registerWhisperIpc()
 
   createWindow()
 

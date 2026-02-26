@@ -5,7 +5,9 @@ import type {
   CoverArt,
   BackgroundConfig,
   MetadataLookupResult,
-  ConversionProgress
+  ConversionProgress,
+  WhisperModel,
+  WhisperProgress
 } from '@shared/types'
 
 const defaultMetadata: BookMetadata = {
@@ -56,6 +58,12 @@ interface ProjectStore {
   // Step 3 — Background
   background: BackgroundConfig
   setBackground: (patch: Partial<BackgroundConfig>) => void
+
+  // Whisper transcription
+  whisperModel: WhisperModel
+  whisperProgress: WhisperProgress | null
+  setWhisperModel: (model: WhisperModel) => void
+  setWhisperProgress: (progress: WhisperProgress | null) => void
 
   // Step 4 — Convert
   outputFormat: 'mkv' | 'mp4'
@@ -122,6 +130,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   // Background
   background: defaultBackground,
   setBackground: (patch) => set({ background: { ...get().background, ...patch } }),
+
+  // Whisper
+  whisperModel: 'small',
+  whisperProgress: null,
+  setWhisperModel: (model) => set({ whisperModel: model }),
+  setWhisperProgress: (progress) => set({ whisperProgress: progress }),
 
   // Convert
   outputFormat: 'mkv',

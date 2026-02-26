@@ -1,5 +1,5 @@
 appId: com.videobookforge.app
-productName: VideoBookForge
+productName: VideoBook Forge
 copyright: Copyright © 2026
 directories:
   buildResources: build
@@ -14,8 +14,7 @@ asarUnpack:
   - resources/**
 win:
   executableName: VideoBookForge
-  signingHashAlgorithms: []
-  sign: false
+  icon: resources/icon.ico
   target:
     - target: nsis
       arch: [x64]

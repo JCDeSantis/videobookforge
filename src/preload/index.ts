@@ -39,6 +39,19 @@ const api = {
       ipcRenderer.on(IPC.CONVERT_PROGRESS, handler)
       return () => ipcRenderer.removeListener(IPC.CONVERT_PROGRESS, handler)
     }
+  },
+
+  whisper: {
+    transcribe: (model: string, audioPaths: string[]): Promise<string> =>
+      ipcRenderer.invoke(IPC.WHISPER_TRANSCRIBE, model, audioPaths),
+    cancel: (): void => { ipcRenderer.invoke(IPC.WHISPER_CANCEL) },
+    checkModel: (model: string): Promise<{ modelReady: boolean; binaryReady: boolean }> =>
+      ipcRenderer.invoke(IPC.WHISPER_CHECK_MODEL, model),
+    onProgress: (cb: (data: unknown) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: unknown): void => cb(data)
+      ipcRenderer.on(IPC.WHISPER_PROGRESS, handler)
+      return () => ipcRenderer.removeListener(IPC.WHISPER_PROGRESS, handler)
+    }
   }
 }
 

@@ -6,6 +6,7 @@ import { MetadataPage } from '@renderer/pages/MetadataPage'
 import { BackgroundPage } from '@renderer/pages/BackgroundPage'
 import { ConvertPage } from '@renderer/pages/ConvertPage'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import logo from './assets/logo.png'
 
 const PAGES = [ImportPage, MetadataPage, BackgroundPage, ConvertPage]
 const STEP_TITLES = ['Import Files', 'Metadata', 'Background', 'Export & Convert']
@@ -39,11 +40,14 @@ export function App(): React.JSX.Element {
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/60 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-violet-400 font-bold text-sm tracking-tight">VideoBookForge</span>
-          <span className="text-zinc-700 text-xs">·</span>
-          <span className="text-zinc-500 text-xs">{STEP_TITLES[currentStep]}</span>
+      <div className="flex items-center justify-between px-5 py-2.5 border-b border-zinc-800/60 shrink-0">
+        <div className="flex items-center gap-3">
+          <img src={logo} alt="VideoBook Forge" className="w-8 h-8 rounded-md" />
+          <div className="flex items-center gap-2">
+            <span className="text-violet-400 font-bold text-sm tracking-tight">VideoBook Forge</span>
+            <span className="text-zinc-700 text-xs">·</span>
+            <span className="text-zinc-500 text-xs">{STEP_TITLES[currentStep]}</span>
+          </div>
         </div>
       </div>
 

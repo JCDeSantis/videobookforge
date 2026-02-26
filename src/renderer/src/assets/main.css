@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* Remap the violet palette to a rich red so all violet-* utilities render as the app accent color */
+@theme {
+  --color-violet-300: #fca5a5;
+  --color-violet-400: #f87171;
+  --color-violet-500: #ef4444;
+  --color-violet-600: #dc2626;
+  --color-violet-700: #b91c1c;
+  --color-violet-800: #991b1b;
+  --color-violet-900: #7f1d1d;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
