@@ -1,29 +1,20 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { existsSync } from 'fs'
 import type { ProbeResult } from '../../shared/types'
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ffmpegStatic = require('ffmpeg-static') as string
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const ffprobeStatic = (require('ffprobe-static') as { path: string }).path
 
 const execFileAsync = promisify(execFile)
 
-function findBinary(name: string, knownPaths: string[]): string {
-  for (const p of knownPaths) {
-    if (existsSync(p)) return p
-  }
-  return name // fall back to PATH
-}
-
 export function getFfmpegPath(): string {
-  return findBinary('ffmpeg', [
-    'C:\\ffmpeg\\bin\\ffmpeg.exe',
-    'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
-  ])
+  return ffmpegStatic
 }
 
 export function getFfprobePath(): string {
-  return findBinary('ffprobe', [
-    'C:\\ffmpeg\\bin\\ffprobe.exe',
-    'C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe',
-  ])
+  return ffprobeStatic
 }
 
 export async function probeFile(filePath: string): Promise<ProbeResult> {
