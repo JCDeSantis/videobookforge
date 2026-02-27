@@ -47,6 +47,12 @@ const api = {
     cancel: (): void => { ipcRenderer.invoke(IPC.WHISPER_CANCEL) },
     checkModel: (model: string): Promise<{ modelReady: boolean; binaryReady: boolean }> =>
       ipcRenderer.invoke(IPC.WHISPER_CHECK_MODEL, model),
+    storageInfo: (): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.WHISPER_STORAGE_INFO),
+    deleteBinary: (): Promise<void> =>
+      ipcRenderer.invoke(IPC.WHISPER_DELETE_BINARY),
+    deleteModel: (model: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.WHISPER_DELETE_MODEL, model),
     onProgress: (cb: (data: unknown) => void): (() => void) => {
       const handler = (_: Electron.IpcRendererEvent, data: unknown): void => cb(data)
       ipcRenderer.on(IPC.WHISPER_PROGRESS, handler)

@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, statSync } from 'fs'
+import { unlink } from 'fs/promises'
 import type { WhisperModel, WhisperModelInfo } from '../../shared/types'
 
 export const WHISPER_MODELS: WhisperModelInfo[] = [
@@ -46,6 +47,10 @@ export function getModelDir(): string {
 
 export function getModelPath(model: WhisperModel): string {
   return join(getModelDir(), `ggml-${model}.bin`)
+}
+
+export async function deleteModel(model: WhisperModel): Promise<void> {
+  await unlink(getModelPath(model)).catch(() => {})
 }
 
 export function isModelDownloaded(model: WhisperModel): boolean {

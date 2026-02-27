@@ -112,6 +112,18 @@ export interface WhisperProgress {
   useGpu?: boolean          // true if CUDA-accelerated binary is active
 }
 
+export interface WhisperStorageInfo {
+  binaryReady: boolean
+  binaryVersion: string
+  gpuEnabled: boolean
+  models: Array<{
+    id: WhisperModel
+    name: string
+    size: string
+    downloaded: boolean
+  }>
+}
+
 export const IPC = {
   FILES_OPEN_DIALOG: 'files:open-dialog',
   FILES_CHECK_EXISTS: 'files:check-exists',
@@ -127,4 +139,7 @@ export const IPC = {
   WHISPER_CANCEL: 'whisper:cancel',
   WHISPER_PROGRESS: 'whisper:progress',
   WHISPER_CHECK_MODEL: 'whisper:check-model',
+  WHISPER_STORAGE_INFO: 'whisper:storage-info',
+  WHISPER_DELETE_BINARY: 'whisper:delete-binary',
+  WHISPER_DELETE_MODEL: 'whisper:delete-model',
 } as const

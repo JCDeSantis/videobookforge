@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { FolderOpen, FileText, Music, SortAsc, Sparkles, X, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { FolderOpen, FileText, Music, SortAsc, Sparkles, X, AlertCircle, CheckCircle2, HardDrive, Trash2 } from 'lucide-react'
 import { useProjectStore } from '@renderer/store/useProjectStore'
 import { ipc } from '@renderer/lib/ipc'
 import { basename, formatDuration, cn } from '@renderer/lib/utils'
@@ -7,7 +7,7 @@ import { FileDropZone } from '@renderer/components/FileDropZone'
 import { FileList } from '@renderer/components/FileList'
 import { Button } from '@renderer/components/ui/button'
 import { TranscriptionOverlay, type TranscriptSegment } from '@renderer/components/TranscriptionOverlay'
-import type { AudioFile, WhisperModel, WhisperProgress } from '@shared/types'
+import type { AudioFile, WhisperModel, WhisperProgress, WhisperStorageInfo } from '@shared/types'
 import { WHISPER_MODELS } from '@renderer/lib/whisperModels'
 
 let fileIdCounter = 0
@@ -36,6 +36,8 @@ export function ImportPage() {
 
   const [loading, setLoading] = useState(false)
   const [showAiPanel, setShowAiPanel] = useState(false)
+  const [showManage, setShowManage] = useState(false)
+  const [storageInfo, setStorageInfo] = useState<WhisperStorageInfo | null>(null)
   const [liveTranscript, setLiveTranscript] = useState<TranscriptSegment[]>([])
   const unsubRef = useRef<(() => void) | null>(null)
   // Incremented on each new run — stale callbacks from cancelled runs check this before updating state
@@ -51,6 +53,25 @@ export function ImportPage() {
   useEffect(() => {
     return () => { unsubRef.current?.() }
   }, [])
+
+  // Fetch storage info whenever the manage panel opens
+  useEffect(() => {
+    if (showManage) {
+      ipc.whisper.storageInfo().then(setStorageInfo)
+    } else {
+      setStorageInfo(null)
+    }
+  }, [showManage])
+
+  async function handleDeleteBinary() {
+    await ipc.whisper.deleteBinary()
+    setStorageInfo(await ipc.whisper.storageInfo())
+  }
+
+  async function handleDeleteModel(model: WhisperModel) {
+    await ipc.whisper.deleteModel(model)
+    setStorageInfo(await ipc.whisper.storageInfo())
+  }
 
   async function handleAudioDrop(paths: string[]) {
     setLoading(true)
@@ -219,12 +240,120 @@ export function ImportPage() {
                 Generate with AI
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowManage((v) => !v)}
+              disabled={isOverlayActive}
+              className={cn(showManage && 'text-violet-400')}
+              title="Manage AI downloads"
+            >
+              <HardDrive size={13} />
+            </Button>
             <Button variant="ghost" size="sm" onClick={handlePickSrt} disabled={isOverlayActive}>
               <FolderOpen size={13} />
               Browse
             </Button>
           </div>
         </div>
+
+        {/* AI storage management panel */}
+        {showManage && !isOverlayActive && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 mb-3 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <HardDrive size={14} className="text-violet-400" />
+                <span className="text-sm font-medium text-zinc-300">AI Storage</span>
+              </div>
+              <button
+                onClick={() => setShowManage(false)}
+                className="text-zinc-600 hover:text-zinc-400 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {storageInfo === null ? (
+              <p className="text-xs text-zinc-600">Loading...</p>
+            ) : (
+              <>
+                {/* Engine / binary row */}
+                <div>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-wide mb-1.5">Engine</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-300 flex-1">
+                      whisper.cpp {storageInfo.binaryVersion}
+                    </span>
+                    {storageInfo.binaryReady && (
+                      <span
+                        className={
+                          storageInfo.gpuEnabled
+                            ? 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20'
+                            : 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 border border-zinc-700'
+                        }
+                      >
+                        {storageInfo.gpuEnabled ? 'GPU' : 'CPU'}
+                      </span>
+                    )}
+                    <span
+                      className={cn(
+                        'text-[10px]',
+                        storageInfo.binaryReady ? 'text-green-400' : 'text-zinc-600'
+                      )}
+                    >
+                      {storageInfo.binaryReady ? 'Downloaded' : 'Not downloaded'}
+                    </span>
+                    {storageInfo.binaryReady && (
+                      <button
+                        onClick={handleDeleteBinary}
+                        className="text-zinc-600 hover:text-red-400 transition-colors"
+                        title="Delete engine binary"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="h-px bg-zinc-800" />
+
+                {/* Models */}
+                <div>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-wide mb-1.5">Models</p>
+                  <div className="flex flex-col gap-2">
+                    {storageInfo.models.map((m) => (
+                      <div key={m.id} className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-300 w-14 shrink-0">{m.name}</span>
+                        <span className="text-[10px] text-zinc-600 w-14 shrink-0">{m.size}</span>
+                        <span
+                          className={cn(
+                            'text-[10px] flex-1',
+                            m.downloaded ? 'text-green-400' : 'text-zinc-600'
+                          )}
+                        >
+                          {m.downloaded ? 'Downloaded' : 'Not downloaded'}
+                        </span>
+                        {m.downloaded && (
+                          <button
+                            onClick={() => handleDeleteModel(m.id as WhisperModel)}
+                            className="text-zinc-600 hover:text-red-400 transition-colors"
+                            title={`Delete ${m.name} model`}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-zinc-700">
+                  Deleted files re-download automatically when you next generate subtitles.
+                </p>
+              </>
+            )}
+          </div>
+        )}
 
         {/* AI transcription panel — shown when idle/done/error, not during active run */}
         {(showAiPanel || isDone || isError) && !srtPath && (

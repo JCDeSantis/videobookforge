@@ -1,7 +1,12 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { transcribeAudio, cancelTranscription } from '../whisper/transcribe'
-import { isModelDownloaded } from '../whisper/models'
-import { isBinaryDownloaded } from '../whisper/binary'
+import { isModelDownloaded, deleteModel, WHISPER_MODELS } from '../whisper/models'
+import {
+  isBinaryDownloaded,
+  isGpuEnabled,
+  deleteBinary,
+  WHISPER_VERSION
+} from '../whisper/binary'
 import type { WhisperModel } from '../../shared/types'
 import { IPC } from '../../shared/types'
 
@@ -20,5 +25,27 @@ export function registerWhisperIpc(): void {
       modelReady: isModelDownloaded(model),
       binaryReady: isBinaryDownloaded()
     }
+  })
+
+  ipcMain.handle(IPC.WHISPER_STORAGE_INFO, () => {
+    return {
+      binaryReady: isBinaryDownloaded(),
+      binaryVersion: WHISPER_VERSION,
+      gpuEnabled: isGpuEnabled(),
+      models: WHISPER_MODELS.map((m) => ({
+        id: m.id,
+        name: m.name,
+        size: m.size,
+        downloaded: isModelDownloaded(m.id)
+      }))
+    }
+  })
+
+  ipcMain.handle(IPC.WHISPER_DELETE_BINARY, () => {
+    deleteBinary()
+  })
+
+  ipcMain.handle(IPC.WHISPER_DELETE_MODEL, (_event, model: WhisperModel) => {
+    return deleteModel(model)
   })
 }

@@ -6,7 +6,8 @@ import {
   createWriteStream,
   readFileSync,
   writeFileSync,
-  readdirSync
+  readdirSync,
+  rmSync
 } from 'fs'
 import { unlink } from 'fs/promises'
 import { exec } from 'child_process'
@@ -15,7 +16,7 @@ import axios from 'axios'
 
 const execAsync = promisify(exec)
 
-const WHISPER_VERSION = 'v1.8.3'
+export const WHISPER_VERSION = 'v1.8.3'
 const CPU_BINARY_URL = `https://github.com/ggml-org/whisper.cpp/releases/download/${WHISPER_VERSION}/whisper-bin-x64.zip`
 
 // Binary may be named differently across versions
@@ -163,6 +164,13 @@ async function downloadZip(
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
+
+export function deleteBinary(): void {
+  const binDir = getBinDir()
+  if (existsSync(binDir)) {
+    rmSync(binDir, { recursive: true, force: true })
+  }
+}
 
 export async function downloadBinary(
   onProgress: (percent: number, message: string) => void,

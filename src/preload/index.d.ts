@@ -9,7 +9,8 @@ import type {
   BackgroundConfig,
   ConversionOptions,
   WhisperModel,
-  WhisperProgress
+  WhisperProgress,
+  WhisperStorageInfo
 } from '../shared/types'
 
 interface ConvertStartPayload {
@@ -48,6 +49,9 @@ interface AppAPI {
     transcribe(model: WhisperModel, audioPaths: string[]): Promise<string>
     cancel(): void
     checkModel(model: WhisperModel): Promise<{ modelReady: boolean; binaryReady: boolean }>
+    storageInfo(): Promise<WhisperStorageInfo>
+    deleteBinary(): Promise<void>
+    deleteModel(model: WhisperModel): Promise<void>
     onProgress(cb: (data: WhisperProgress) => void): () => void
   }
 }
