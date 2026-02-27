@@ -86,6 +86,13 @@ export async function startConversion(
 
     args.push('-map', '[vout]', '-map', '0:a')
 
+    // Static image background: encode at the minimum fps needed.
+    // Without subtitle burn-in: 1fps — the image never changes, so 1 frame/sec is identical
+    //   to 25fps visually but requires 25x less encoding work and produces a ~25x smaller video stream.
+    // With subtitle burn-in: 5fps — enough for smooth subtitle transitions at sentence-level timing.
+    const outputFps = shouldBurnSubs ? 5 : 1
+    args.push('-r', String(outputFps))
+
     // h264_nvenc: VBR constant-quality mode (closest equivalent to libx264 CRF).
     // Subtitle burn-in and scaling stay on CPU; only the encode step moves to GPU.
     const videoEncArgs = useNvenc
