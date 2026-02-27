@@ -5,6 +5,7 @@ import {
   isBinaryDownloaded,
   isGpuEnabled,
   deleteBinary,
+  detectNvidiaGpu,
   WHISPER_VERSION
 } from '../whisper/binary'
 import type { WhisperModel } from '../../shared/types'
@@ -27,11 +28,13 @@ export function registerWhisperIpc(): void {
     }
   })
 
-  ipcMain.handle(IPC.WHISPER_STORAGE_INFO, () => {
+  ipcMain.handle(IPC.WHISPER_STORAGE_INFO, async () => {
+    const [gpuDetected] = await Promise.all([detectNvidiaGpu()])
     return {
       binaryReady: isBinaryDownloaded(),
       binaryVersion: WHISPER_VERSION,
       gpuEnabled: isGpuEnabled(),
+      gpuDetected,
       models: WHISPER_MODELS.map((m) => ({
         id: m.id,
         name: m.name,

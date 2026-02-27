@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { FolderOpen, FileText, Music, SortAsc, Sparkles, X, AlertCircle, CheckCircle2, HardDrive, Trash2 } from 'lucide-react'
+import { FolderOpen, FileText, Music, SortAsc, Sparkles, X, AlertCircle, AlertTriangle, CheckCircle2, HardDrive, Trash2 } from 'lucide-react'
 import { useProjectStore } from '@renderer/store/useProjectStore'
 import { ipc } from '@renderer/lib/ipc'
 import { basename, formatDuration, cn } from '@renderer/lib/utils'
@@ -314,6 +314,18 @@ export function ImportPage() {
                     )}
                   </div>
                 </div>
+
+                {/* GPU upgrade notice */}
+                {storageInfo.gpuDetected && !storageInfo.gpuEnabled && (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-500/8 border border-amber-500/20 px-3 py-2.5">
+                    <AlertTriangle size={12} className="text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-300 leading-snug">
+                      {storageInfo.binaryReady
+                        ? 'NVIDIA GPU detected but current engine was downloaded without GPU support. Delete the engine above to re-download with GPU acceleration.'
+                        : 'NVIDIA GPU detected — will use GPU acceleration when the engine downloads.'}
+                    </p>
+                  </div>
+                )}
 
                 <div className="h-px bg-zinc-800" />
 

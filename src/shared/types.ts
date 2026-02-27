@@ -116,6 +116,7 @@ export interface WhisperStorageInfo {
   binaryReady: boolean
   binaryVersion: string
   gpuEnabled: boolean
+  gpuDetected: boolean  // NVIDIA GPU present on this system
   models: Array<{
     id: WhisperModel
     name: string

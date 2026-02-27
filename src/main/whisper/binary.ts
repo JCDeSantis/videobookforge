@@ -61,7 +61,7 @@ export function isBinaryDownloaded(): boolean {
 
 // ── GPU detection ──────────────────────────────────────────────────────────────
 
-async function detectNvidiaGpu(): Promise<boolean> {
+export async function detectNvidiaGpu(): Promise<boolean> {
   // nvidia-smi is the most reliable check (present on any system with NVIDIA drivers)
   try {
     await execAsync('nvidia-smi --query-gpu=name --format=csv,noheader', { timeout: 5000 })
@@ -99,10 +99,16 @@ function getGpuMarkerPath(): string {
 }
 
 export function isGpuEnabled(): boolean {
+  const markerPath = getGpuMarkerPath()
   try {
-    const data = JSON.parse(readFileSync(getGpuMarkerPath(), 'utf8')) as { enabled: boolean }
+    const data = JSON.parse(readFileSync(markerPath, 'utf8')) as { enabled: boolean }
     return data.enabled === true
   } catch {
+    // Binary exists but no marker — it was downloaded before GPU detection was added.
+    // Write an explicit CPU marker so the UI can show the correct upgrade notice.
+    if (isBinaryDownloaded()) {
+      try { writeFileSync(markerPath, JSON.stringify({ enabled: false })) } catch {}
+    }
     return false
   }
 }
