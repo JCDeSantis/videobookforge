@@ -3,6 +3,8 @@ import { promisify } from 'util'
 import { sep } from 'path'
 import type { ProbeResult } from '../../shared/types'
 
+let nvencCache: boolean | null = null
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ffmpegStatic = require('ffmpeg-static') as string
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -21,6 +23,19 @@ export function getFfmpegPath(): string {
 
 export function getFfprobePath(): string {
   return unpackedPath(ffprobeStatic)
+}
+
+// Returns true if the bundled ffmpeg binary supports h264_nvenc (NVIDIA GPU encoding).
+// Result is cached for the lifetime of the process.
+export async function detectNvenc(): Promise<boolean> {
+  if (nvencCache !== null) return nvencCache
+  try {
+    const { stdout } = await execFileAsync(getFfmpegPath(), ['-hide_banner', '-encoders'])
+    nvencCache = stdout.includes('h264_nvenc')
+  } catch {
+    nvencCache = false
+  }
+  return nvencCache
 }
 
 export async function probeFile(filePath: string): Promise<ProbeResult> {

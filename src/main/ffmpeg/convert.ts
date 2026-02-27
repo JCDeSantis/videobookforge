@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from 'child_process'
 import type { BrowserWindow } from 'electron'
-import { getFfmpegPath, sumDurations } from './probe'
+import { getFfmpegPath, sumDurations, detectNvenc } from './probe'
 import { createTempDir, createConcatListFile, cleanupTempDir } from './concat'
 import { prepareBackground } from './background'
 import type {
@@ -48,7 +48,13 @@ export async function startConversion(
     )
     const bgResult = await prepareBackground(background, resolution, tempDir)
 
-    send(win, { phase: 'converting', percent: 10, message: `Building ${format.toUpperCase()}...` })
+    const useNvenc = await detectNvenc()
+
+    send(win, {
+      phase: 'converting',
+      percent: 10,
+      message: `Building ${format.toUpperCase()}${useNvenc ? ' (GPU)' : ''}...`
+    })
 
     const [width, height] = resolution.split('x')
     const ffmpeg = getFfmpegPath()
@@ -80,16 +86,22 @@ export async function startConversion(
 
     args.push('-map', '[vout]', '-map', '0:a')
 
+    // h264_nvenc: VBR constant-quality mode (closest equivalent to libx264 CRF).
+    // Subtitle burn-in and scaling stay on CPU; only the encode step moves to GPU.
+    const videoEncArgs = useNvenc
+      ? ['-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'vbr', '-cq', '28', '-b:v', '0']
+      : ['-c:v', 'libx264', '-tune', 'stillimage', '-crf', '28', '-preset', 'fast']
+
     if (format === 'mkv') {
       // Soft subtitle track when not burning in
       if (srtIdx >= 0 && !burnSubtitles) {
         args.push('-map', `${srtIdx}:s`, '-c:s', 'srt')
       }
-      args.push('-c:v', 'libx264', '-tune', 'stillimage', '-crf', '28', '-preset', 'fast')
+      args.push(...videoEncArgs)
       args.push('-c:a', 'copy')
     } else {
       // MP4
-      args.push('-c:v', 'libx264', '-tune', 'stillimage', '-crf', '28', '-preset', 'fast')
+      args.push(...videoEncArgs)
       args.push('-c:a', 'aac', '-b:a', '192k')
       args.push('-movflags', '+faststart')
     }
