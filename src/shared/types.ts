@@ -38,6 +38,7 @@ export interface BackgroundConfig {
 
 export type OutputFormat = 'mkv' | 'mp4'
 export type VideoResolution = '1280x720' | '1920x1080'
+export type SubtitleSource = 'none' | 'manual' | 'ai'
 
 export interface ConversionOptions {
   outputPath: string

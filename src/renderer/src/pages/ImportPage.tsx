@@ -28,8 +28,8 @@ async function buildAudioFile(path: string): Promise<AudioFile> {
 
 export function ImportPage() {
   const {
-    audioFiles, srtPath,
-    addAudioFiles, removeAudioFile, reorderAudioFiles, setSrtPath,
+    audioFiles, srtPath, subtitleSource,
+    addAudioFiles, removeAudioFile, reorderAudioFiles, setSrtPath, setSubtitleSource,
     whisperModel, whisperProgress,
     setWhisperModel, setWhisperProgress
   } = useProjectStore()
@@ -97,7 +97,10 @@ export function ImportPage() {
       title: 'Select Subtitle File',
       filters: [{ name: 'Subtitle Files', extensions: ['srt'] }]
     })
-    if (paths[0]) setSrtPath(paths[0])
+    if (paths[0]) {
+      setSrtPath(paths[0])
+      setSubtitleSource('manual')
+    }
   }
 
   function handleAutoSort() {
@@ -117,6 +120,7 @@ export function ImportPage() {
 
     const gen = ++genRef.current
 
+    setSubtitleSource('ai')
     setLiveTranscript([])
     setWhisperProgress({ phase: 'transcribing', percent: 0, message: 'Starting...' })
 
@@ -159,6 +163,12 @@ export function ImportPage() {
     setWhisperProgress(null)
     setShowAiPanel(false)
     setLiveTranscript([])
+    if (!srtPath) setSubtitleSource('none')
+  }
+
+  function handleQueueAiForConvert() {
+    setSubtitleSource('ai')
+    setShowAiPanel(false)
   }
 
   const totalDuration = audioFiles.reduce((s, f) => s + f.duration, 0)
@@ -234,10 +244,10 @@ export function ImportPage() {
                 size="sm"
                 onClick={() => setShowAiPanel((v) => !v)}
                 disabled={isOverlayActive}
-                className={cn(showAiPanel && 'text-violet-400')}
+                className={cn((showAiPanel || subtitleSource === 'ai') && 'text-violet-400')}
               >
                 <Sparkles size={13} />
-                Generate with AI
+                {subtitleSource === 'ai' ? 'AI queued' : 'Generate with AI'}
               </Button>
             )}
             <Button
@@ -431,16 +441,29 @@ export function ImportPage() {
 
             {/* Generate / Try Again button */}
             {!isDone && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleGenerate}
-                disabled={!audioFiles.length}
-                className="w-full"
-              >
-                <Sparkles size={13} />
-                {isError ? 'Try Again' : 'Generate Subtitles'}
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleGenerate}
+                  disabled={!audioFiles.length}
+                  className="w-full"
+                >
+                  <Sparkles size={13} />
+                  {isError ? 'Try Again' : 'Generate Now'}
+                </Button>
+                {!isError && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleQueueAiForConvert}
+                    disabled={!audioFiles.length}
+                    className="w-full"
+                  >
+                    Generate automatically when converting
+                  </Button>
+                )}
+              </>
             )}
 
             {!audioFiles.length && (
@@ -451,7 +474,7 @@ export function ImportPage() {
 
         {/* Manual SRT drop zone */}
         <FileDropZone
-          onFiles={(paths) => setSrtPath(paths[0])}
+          onFiles={(paths) => { setSrtPath(paths[0]); setSubtitleSource('manual') }}
           accept={['srt']}
           className="p-4"
         >
@@ -465,7 +488,23 @@ export function ImportPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={(e) => { e.stopPropagation(); setSrtPath(null) }}
+                onClick={(e) => { e.stopPropagation(); setSrtPath(null); setSubtitleSource('none') }}
+                className="text-zinc-600 hover:text-red-400"
+              >
+                Remove
+              </Button>
+            </div>
+          ) : subtitleSource === 'ai' ? (
+            <div className="flex items-center gap-3 py-1">
+              <Sparkles size={16} className="text-violet-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-violet-300">AI subtitles — generate on convert</p>
+                <p className="text-xs text-zinc-500">Using {WHISPER_MODELS.find(m => m.id === whisperModel)?.name ?? whisperModel} model</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); setSubtitleSource('none') }}
                 className="text-zinc-600 hover:text-red-400"
               >
                 Remove

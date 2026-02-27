@@ -1,10 +1,11 @@
-import { BookOpen, Tag, Image, Clapperboard, Check } from 'lucide-react'
+import { BookOpen, Tag, Image, Settings, Clapperboard, Check } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 
 const STEPS = [
   { label: 'Import', icon: BookOpen },
   { label: 'Metadata', icon: Tag },
   { label: 'Background', icon: Image },
+  { label: 'Export', icon: Settings },
   { label: 'Convert', icon: Clapperboard }
 ]
 

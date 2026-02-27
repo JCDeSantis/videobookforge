@@ -1,4 +1,6 @@
 import { spawn, ChildProcess } from 'child_process'
+import { copyFile } from 'fs/promises'
+import { dirname, basename, extname, join } from 'path'
 import type { BrowserWindow } from 'electron'
 import { getFfmpegPath, sumDurations, detectNvenc } from './probe'
 import { createTempDir, createConcatListFile, cleanupTempDir } from './concat'
@@ -166,6 +168,12 @@ export async function startConversion(
     })
 
     send(win, { phase: 'done', percent: 100, message: 'Conversion complete!', outputPath })
+
+    // Copy SRT alongside the output file when subtitles are not burned in
+    if (srtPath && !shouldBurnSubs) {
+      const srtOutputPath = join(dirname(outputPath), `${basename(outputPath, extname(outputPath))}.srt`)
+      try { await copyFile(srtPath, srtOutputPath) } catch { /* non-fatal */ }
+    }
   } catch (err) {
     send(win, {
       phase: 'error',

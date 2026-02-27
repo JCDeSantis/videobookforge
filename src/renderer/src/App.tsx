@@ -4,17 +4,19 @@ import { Button } from '@renderer/components/ui/button'
 import { ImportPage } from '@renderer/pages/ImportPage'
 import { MetadataPage } from '@renderer/pages/MetadataPage'
 import { BackgroundPage } from '@renderer/pages/BackgroundPage'
+import { ExportSettingsPage } from '@renderer/pages/ExportSettingsPage'
 import { ConvertPage } from '@renderer/pages/ConvertPage'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import logo from './assets/logo.png'
 
-const PAGES = [ImportPage, MetadataPage, BackgroundPage, ConvertPage]
-const STEP_TITLES = ['Import Files', 'Metadata', 'Background', 'Export & Convert']
+const PAGES = [ImportPage, MetadataPage, BackgroundPage, ExportSettingsPage, ConvertPage]
+const STEP_TITLES = ['Import Files', 'Metadata', 'Background', 'Export Settings', 'Convert']
 
 function canAdvance(step: number, state: ReturnType<typeof useProjectStore.getState>): boolean {
   if (step === 0) return state.audioFiles.length > 0
   if (step === 1) return true
   if (step === 2) return true
+  if (step === 3) return state.outputPath.length > 0
   return false
 }
 
@@ -24,17 +26,20 @@ export function App(): React.JSX.Element {
 
   const Page = PAGES[currentStep]
   const isLastStep = currentStep === PAGES.length - 1
-  const isConverting =
-    store.conversionProgress !== null &&
-    store.conversionProgress.phase !== 'done' &&
-    store.conversionProgress.phase !== 'error'
+  const isProcessing =
+    (store.conversionProgress !== null &&
+      store.conversionProgress.phase !== 'done' &&
+      store.conversionProgress.phase !== 'error') ||
+    (store.whisperProgress !== null &&
+      store.whisperProgress.phase !== 'done' &&
+      store.whisperProgress.phase !== 'error')
 
   function handleNext(): void {
     if (canAdvance(currentStep, store)) setCurrentStep(currentStep + 1)
   }
 
   function handleBack(): void {
-    if (currentStep > 0 && !isConverting) setCurrentStep(currentStep - 1)
+    if (currentStep > 0 && !isProcessing) setCurrentStep(currentStep - 1)
   }
 
   return (
@@ -54,7 +59,7 @@ export function App(): React.JSX.Element {
       {/* Step nav */}
       <StepNav
         currentStep={currentStep}
-        onStepClick={(s) => { if (!isConverting) setCurrentStep(s) }}
+        onStepClick={(s) => { if (!isProcessing) setCurrentStep(s) }}
       />
 
       {/* Page content */}
@@ -67,7 +72,7 @@ export function App(): React.JSX.Element {
         <Button
           variant="ghost"
           onClick={handleBack}
-          disabled={currentStep === 0 || isConverting}
+          disabled={currentStep === 0 || isProcessing}
         >
           <ChevronLeft size={15} />
           Back

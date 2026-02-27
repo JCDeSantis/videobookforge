@@ -7,7 +7,8 @@ import type {
   MetadataLookupResult,
   ConversionProgress,
   WhisperModel,
-  WhisperProgress
+  WhisperProgress,
+  SubtitleSource
 } from '@shared/types'
 
 const defaultMetadata: BookMetadata = {
@@ -38,11 +39,13 @@ interface ProjectStore {
   // Step 1 — Import
   audioFiles: AudioFile[]
   srtPath: string | null
+  subtitleSource: SubtitleSource
   setAudioFiles: (files: AudioFile[]) => void
   addAudioFiles: (files: AudioFile[]) => void
   removeAudioFile: (id: string) => void
   reorderAudioFiles: (activeId: string, overId: string) => void
   setSrtPath: (path: string | null) => void
+  setSubtitleSource: (source: SubtitleSource) => void
 
   // Step 2 — Metadata
   metadata: BookMetadata
@@ -85,6 +88,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   // Import
   audioFiles: [],
   srtPath: null,
+  subtitleSource: 'none',
   setAudioFiles: (files) => set({ audioFiles: files }),
   addAudioFiles: (incoming) => {
     const existing = get().audioFiles
@@ -104,6 +108,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ audioFiles: files })
   },
   setSrtPath: (path) => set({ srtPath: path }),
+  setSubtitleSource: (source) => set({ subtitleSource: source }),
 
   // Metadata
   metadata: defaultMetadata,
