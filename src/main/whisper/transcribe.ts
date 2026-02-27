@@ -2,14 +2,14 @@ import { spawn, ChildProcess } from 'child_process'
 import { join, dirname } from 'path'
 import { mkdirSync, createWriteStream } from 'fs'
 import { unlink } from 'fs/promises'
+import { cpus } from 'os'
 import axios from 'axios'
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { getWhisperExe, isBinaryDownloaded, downloadBinary } from './binary'
 import { getModelPath, getModelUrl, isModelDownloaded, getModelDir } from './models'
-import { getFfmpegPath } from '../ffmpeg/probe'
+import { getFfmpegPath, sumDurations } from '../ffmpeg/probe'
 import { createTempDir, createConcatListFile, cleanupTempDir } from '../ffmpeg/concat'
-import { probeFile } from '../ffmpeg/probe'
 import type { WhisperModel, WhisperProgress } from '../../shared/types'
 import { IPC } from '../../shared/types'
 
@@ -23,6 +23,11 @@ function send(win: BrowserWindow, progress: WhisperProgress): void {
 function hhmmssToSeconds(time: string): number {
   const parts = time.split(':').map(parseFloat)
   return parts[0] * 3600 + parts[1] * 60 + parts[2]
+}
+
+// Use as many threads as logical CPUs, capped at 8 (diminishing returns beyond that)
+function getThreadCount(): number {
+  return Math.max(1, Math.min(cpus().length, 8))
 }
 
 async function downloadModel(
@@ -112,7 +117,6 @@ export async function transcribeAudio(
 
     // Step 2: Download model if needed (also re-downloads if the file is incomplete)
     if (!isModelDownloaded(model)) {
-      // Remove any partial file from a previous interrupted download before starting fresh
       await unlink(getModelPath(model)).catch(() => {})
       send(win, { phase: 'downloading-model', percent: 0, message: 'Downloading model...' })
       await downloadModel(model, win, signal)
@@ -120,86 +124,96 @@ export async function transcribeAudio(
 
     if (signal.aborted) throw new Error('Cancelled')
 
-    // Step 3: Concat audio + convert to 16kHz mono WAV (required by whisper.cpp)
-    send(win, { phase: 'transcribing', percent: 0, message: 'Preparing audio...' })
-
-    tempDir = await createTempDir()
-    const listPath = await createConcatListFile(audioPaths, tempDir)
-    const wavPath = join(tempDir, 'audio.wav')
-
-    const ffmpeg = getFfmpegPath()
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn(ffmpeg, [
-        '-f', 'concat', '-safe', '0', '-i', listPath,
-        '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
-        '-y', wavPath
-      ])
-      activeProcess = proc
-
-      const onAbort = (): void => {
-        proc.kill('SIGTERM')
-        reject(new Error('Cancelled'))
-      }
-      signal.addEventListener('abort', onAbort, { once: true })
-
-      let errBuf = ''
-      proc.stderr?.on('data', (c: Buffer) => { errBuf += c.toString() })
-      proc.on('close', (code) => {
-        signal.removeEventListener('abort', onAbort)
-        activeProcess = null
-        if (signal.aborted) return
-        code === 0 ? resolve() : reject(new Error(`Audio prep failed (${code})\n${errBuf.slice(-500)}`))
-      })
-      proc.on('error', (err) => {
-        signal.removeEventListener('abort', onAbort)
-        activeProcess = null
-        reject(err)
-      })
-    })
+    // Step 3: Probe input files for total duration (used for preparing-phase progress bar)
+    const totalDuration = await sumDurations(audioPaths)
 
     if (signal.aborted) throw new Error('Cancelled')
 
-    // Step 4: Run whisper
-    const probe = await probeFile(wavPath)
-    const totalDuration = probe.duration
+    // Step 4: Build concat list and prepare audio.
+    // For a single file we still go through ffmpeg to ensure 16kHz mono WAV format.
+    // ffmpeg output is piped directly to whisper stdin — no temp WAV written to disk.
+    tempDir = await createTempDir()
+    const listPath = await createConcatListFile(audioPaths, tempDir)
 
     const outputDir = join(app.getPath('userData'), 'whisper', 'output')
     mkdirSync(outputDir, { recursive: true })
     const srtBase = join(outputDir, `transcript_${Date.now()}`)
     const srtPath = `${srtBase}.srt`
 
-    send(win, { phase: 'transcribing', percent: 2, message: 'Transcribing audio...', totalDuration })
+    send(win, { phase: 'preparing', percent: 0, message: 'Preparing audio...', totalDuration })
 
+    const ffmpeg = getFfmpegPath()
     const whisperExe = getWhisperExe()!
     const modelPath = getModelPath(model)
+    const threads = getThreadCount()
+
+    // Spawn ffmpeg writing WAV to stdout (pipe:1), whisper reads from stdin
+    const ffmpegProc = spawn(ffmpeg, [
+      '-f', 'concat', '-safe', '0', '-i', listPath,
+      '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
+      '-f', 'wav',
+      'pipe:1'                   // write WAV to stdout instead of a file
+    ])
+
+    const whisperProc = spawn(whisperExe, [
+      '-m', modelPath,
+      '-f', '-',                 // read audio from stdin
+      '-osrt',
+      '-of', srtBase,
+      '-l', 'auto',
+      '-pp',
+      '-t', String(threads)      // use all available cores (capped at 8)
+    ], {
+      cwd: dirname(whisperExe)
+    })
+
+    // Pipe ffmpeg stdout → whisper stdin
+    ffmpegProc.stdout.pipe(whisperProc.stdin)
+
+    activeProcess = whisperProc  // track for cancellation
+
+    // Wire up cancellation for both processes
+    const onAbort = (): void => {
+      ffmpegProc.kill('SIGTERM')
+      whisperProc.kill('SIGTERM')
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
 
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn(whisperExe, [
-        '-m', modelPath,
-        '-f', wavPath,
-        '-osrt',               // output SRT format
-        '-of', srtBase,        // output file prefix
-        '-l', 'auto',
-        '-pp'                  // print progress to stderr
-      ], {
-        // Run from the binary's own directory so its DLLs are found
-        cwd: dirname(whisperExe)
-      })
-      activeProcess = proc
-
-      const onAbort = (): void => {
-        proc.kill('SIGTERM')
-        reject(new Error('Cancelled'))
-      }
-      signal.addEventListener('abort', onAbort, { once: true })
-
-      let outputBuf = ''
+      let ffmpegErr = ''
+      let whisperOut = ''
       let txPercent = 2
 
-      // whisper-cli writes progress to stderr
-      proc.stderr?.on('data', (chunk: Buffer) => {
+      // ffmpeg writes progress to stderr: parse time= for preparing-phase progress
+      ffmpegProc.stderr?.on('data', (chunk: Buffer) => {
         const text = chunk.toString()
-        outputBuf += text
+        ffmpegErr += text
+        if (totalDuration > 0) {
+          const m = text.match(/time=(\d+):(\d+):(\d+)/)
+          if (m) {
+            const elapsed = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3])
+            const pct = Math.min(Math.round((elapsed / totalDuration) * 100), 99)
+            send(win, { phase: 'preparing', percent: pct, message: 'Preparing audio...', elapsed, totalDuration })
+          }
+        }
+      })
+
+      ffmpegProc.on('close', (code) => {
+        if (code !== 0 && !signal.aborted) {
+          whisperProc.kill()
+          reject(new Error(`Audio prep failed (${code})\n${ffmpegErr.slice(-500)}`))
+        }
+        // ffmpeg done — close whisper's stdin so it knows no more input is coming
+        whisperProc.stdin?.end()
+      })
+
+      // Transition to transcribing once ffmpeg finishes (whisper starts processing)
+      send(win, { phase: 'transcribing', percent: 2, message: 'Transcribing audio...', totalDuration })
+
+      // whisper-cli writes progress to stderr
+      whisperProc.stderr?.on('data', (chunk: Buffer) => {
+        const text = chunk.toString()
+        whisperOut += text
 
         const progMatch = text.match(/progress\s*=\s*(\d+)%/)
         if (progMatch) {
@@ -216,13 +230,11 @@ export async function transcribeAudio(
         }
       })
 
-      // whisper-cli writes segment text to stdout: [HH:MM:SS.fff --> HH:MM:SS.fff]   text
-      // It re-prints all prior segments with each new one (rolling context), so deduplicate by start timestamp.
+      // whisper-cli writes segment text to stdout
       const seenTimestamps = new Set<string>()
-
-      proc.stdout?.on('data', (chunk: Buffer) => {
+      whisperProc.stdout?.on('data', (chunk: Buffer) => {
         const text = chunk.toString()
-        outputBuf += text
+        whisperOut += text
 
         for (const line of text.split('\n')) {
           const segMatch = line.match(/\[([\d:.,]+)\s*-->\s*[\d:.,]+\]\s+(.+)/)
@@ -249,15 +261,15 @@ export async function transcribeAudio(
         }
       })
 
-      proc.on('close', (code) => {
+      whisperProc.on('close', (code) => {
         signal.removeEventListener('abort', onAbort)
         activeProcess = null
         if (signal.aborted) return
         if (code === 0) resolve()
-        else reject(new Error(`Whisper exited with code ${code}\n${outputBuf.slice(-1500)}`))
+        else reject(new Error(`Whisper exited with code ${code}\n${whisperOut.slice(-1500)}`))
       })
 
-      proc.on('error', (err) => {
+      whisperProc.on('error', (err) => {
         signal.removeEventListener('abort', onAbort)
         activeProcess = null
         reject(err)
@@ -267,7 +279,6 @@ export async function transcribeAudio(
     send(win, { phase: 'done', percent: 100, message: 'Transcription complete!', srtPath })
     return srtPath
   } catch (err) {
-    // Don't send an error progress event for user-initiated cancellation
     const isCancelled = signal.aborted || (err instanceof Error && err.message === 'Cancelled')
     if (!isCancelled) {
       send(win, {

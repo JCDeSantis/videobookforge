@@ -94,6 +94,7 @@ export type WhisperPhase =
   | 'idle'
   | 'downloading-binary'
   | 'downloading-model'
+  | 'preparing'
   | 'transcribing'
   | 'done'
   | 'error'

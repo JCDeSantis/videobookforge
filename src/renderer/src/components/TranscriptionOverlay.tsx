@@ -36,6 +36,7 @@ function ProgressBar({ percent }: { percent: number }) {
 export function TranscriptionOverlay({ progress, liveTranscript, onCancel }: TranscriptionOverlayProps) {
   const transcriptEndRef = useRef<HTMLDivElement>(null)
   const isDownloading = progress.phase === 'downloading-binary' || progress.phase === 'downloading-model'
+  const isPreparing = progress.phase === 'preparing'
   const isTranscribing = progress.phase === 'transcribing'
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export function TranscriptionOverlay({ progress, liveTranscript, onCancel }: Tra
   const phaseLabel =
     progress.phase === 'downloading-binary' ? 'Downloading AI Engine' :
     progress.phase === 'downloading-model'  ? 'Downloading AI Model' :
+    progress.phase === 'preparing'          ? 'Preparing Audio' :
     progress.phase === 'transcribing'       ? 'Transcribing' :
     progress.phase
 
@@ -92,6 +94,23 @@ export function TranscriptionOverlay({ progress, liveTranscript, onCancel }: Tra
               <p className="text-xs text-zinc-500 mt-1">{progress.message}</p>
             )}
             <p className="text-xs text-zinc-600 mt-3">Files are cached — this only downloads once</p>
+          </div>
+        </div>
+      )}
+
+      {isPreparing && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
+          <div className="w-10 h-10 rounded-full border-2 border-violet-500/30 border-t-violet-400 animate-spin" />
+          <div>
+            <p className="text-sm font-medium text-zinc-300">Preparing Audio</p>
+            <p className="text-xs text-zinc-500 mt-1">Decoding and formatting for transcription</p>
+            {hasTime && (
+              <p className="text-xs text-zinc-600 mt-2 tabular-nums font-mono">
+                {formatTime(progress.elapsed!)}
+                <span className="text-zinc-700"> / </span>
+                {formatTime(progress.totalDuration!)}
+              </p>
+            )}
           </div>
         </div>
       )}
