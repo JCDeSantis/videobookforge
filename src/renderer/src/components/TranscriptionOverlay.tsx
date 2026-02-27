@@ -72,6 +72,18 @@ export function TranscriptionOverlay({ progress, liveTranscript, onCancel }: Tra
               {formatTime(progress.totalDuration!)}
             </span>
           )}
+          {/* GPU/CPU badge — shown while transcribing */}
+          {isTranscribing && progress.useGpu !== undefined && (
+            <span
+              className={
+                progress.useGpu
+                  ? 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20'
+                  : 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 border border-zinc-700'
+              }
+            >
+              {progress.useGpu ? 'GPU' : 'CPU'}
+            </span>
+          )}
           {/* Percent */}
           <div className="flex items-center gap-1.5">
             {isDownloading && <Download size={11} className="text-zinc-500" />}

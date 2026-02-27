@@ -109,6 +109,7 @@ export interface WhisperProgress {
   segmentTimestamp?: string // "HH:MM:SS" start time for the segment
   elapsed?: number          // seconds of audio processed so far
   totalDuration?: number    // total audio duration in seconds
+  useGpu?: boolean          // true if CUDA-accelerated binary is active
 }
 
 export const IPC = {

@@ -6,7 +6,7 @@ import { cpus } from 'os'
 import axios from 'axios'
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { getWhisperExe, isBinaryDownloaded, downloadBinary } from './binary'
+import { getWhisperExe, isBinaryDownloaded, downloadBinary, isGpuEnabled } from './binary'
 import { getModelPath, getModelUrl, isModelDownloaded, getModelDir } from './models'
 import { getFfmpegPath, sumDurations } from '../ffmpeg/probe'
 import { createTempDir, createConcatListFile, cleanupTempDir } from '../ffmpeg/concat'
@@ -124,6 +124,8 @@ export async function transcribeAudio(
 
     if (signal.aborted) throw new Error('Cancelled')
 
+    const gpuEnabled = isGpuEnabled()
+
     // Step 3: Probe input files for total duration (used for preparing-phase progress bar)
     const totalDuration = await sumDurations(audioPaths)
 
@@ -208,7 +210,7 @@ export async function transcribeAudio(
       })
 
       // Transition to transcribing once ffmpeg finishes (whisper starts processing)
-      send(win, { phase: 'transcribing', percent: 2, message: 'Transcribing audio...', totalDuration })
+      send(win, { phase: 'transcribing', percent: 2, message: 'Transcribing audio...', totalDuration, useGpu: gpuEnabled })
 
       // whisper-cli writes progress to stderr
       whisperProc.stderr?.on('data', (chunk: Buffer) => {
@@ -225,7 +227,8 @@ export async function transcribeAudio(
             percent: txPercent,
             message: `Transcribing... ${pct}%`,
             elapsed,
-            totalDuration
+            totalDuration,
+            useGpu: gpuEnabled
           })
         }
       })
@@ -254,7 +257,8 @@ export async function transcribeAudio(
                 text: segText,
                 segmentTimestamp,
                 elapsed,
-                totalDuration
+                totalDuration,
+                useGpu: gpuEnabled
               })
             }
           }
