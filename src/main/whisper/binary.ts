@@ -85,8 +85,16 @@ async function getCudaAssetUrl(): Promise<string | null> {
       timeout: 10000
     })
     const assets = response.data.assets as Array<{ name: string; browser_download_url: string }>
-    const cudaAsset = assets.find((a) => /whisper-bin-x64.*cuda.*\.zip$/i.test(a.name))
-    return cudaAsset?.browser_download_url ?? null
+    // Asset naming: whisper-cublas-{version}-bin-x64.zip (e.g. whisper-cublas-12.4.0-bin-x64.zip)
+    const cudaAssets = assets.filter((a) => /whisper-cublas-.*-bin-x64\.zip$/i.test(a.name))
+    if (cudaAssets.length === 0) return null
+    // Prefer highest CUDA major version (12 > 11)
+    cudaAssets.sort((a, b) => {
+      const verA = parseFloat(a.name.match(/cublas-(\d+)/)?.[1] ?? '0')
+      const verB = parseFloat(b.name.match(/cublas-(\d+)/)?.[1] ?? '0')
+      return verB - verA
+    })
+    return cudaAssets[0].browser_download_url
   } catch {
     return null
   }
