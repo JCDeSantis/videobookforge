@@ -25,9 +25,9 @@ const defaultMetadata: BookMetadata = {
 
 const defaultBackground: BackgroundConfig = {
   type: 'cover',
-  color: '#1a1a2e',
-  gradientFrom: '#1a1a2e',
-  gradientTo: '#16213e',
+  color: '#000000',
+  gradientFrom: '#000000',
+  gradientTo: '#8b0000',
   gradientDirection: 'to-br'
 }
 
@@ -146,7 +146,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   outputFormat: 'mkv',
   outputResolution: '1280x720',
   outputPath: '',
-  burnSubtitles: false,
+  burnSubtitles: true,
   conversionProgress: null,
   setOutputFormat: (f) => set({ outputFormat: f }),
   setOutputResolution: (r) => set({ outputResolution: r }),

@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
-import { FolderOpen, FileText, Music, SortAsc, Sparkles, X, AlertCircle, AlertTriangle, CheckCircle2, HardDrive, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { FolderOpen, FileText, Music, SortAsc, Sparkles, X, AlertTriangle, HardDrive, Trash2 } from 'lucide-react'
 import { useProjectStore } from '@renderer/store/useProjectStore'
 import { ipc } from '@renderer/lib/ipc'
 import { basename, formatDuration, cn } from '@renderer/lib/utils'
 import { FileDropZone } from '@renderer/components/FileDropZone'
 import { FileList } from '@renderer/components/FileList'
 import { Button } from '@renderer/components/ui/button'
-import { TranscriptionOverlay, type TranscriptSegment } from '@renderer/components/TranscriptionOverlay'
-import type { AudioFile, WhisperModel, WhisperProgress, WhisperStorageInfo } from '@shared/types'
+import type { AudioFile, WhisperModel, WhisperStorageInfo } from '@shared/types'
 import { WHISPER_MODELS } from '@renderer/lib/whisperModels'
 
 let fileIdCounter = 0
@@ -30,29 +29,13 @@ export function ImportPage() {
   const {
     audioFiles, srtPath, subtitleSource,
     addAudioFiles, removeAudioFile, reorderAudioFiles, setSrtPath, setSubtitleSource,
-    whisperModel, whisperProgress,
-    setWhisperModel, setWhisperProgress
+    whisperModel, setWhisperModel
   } = useProjectStore()
 
   const [loading, setLoading] = useState(false)
   const [showAiPanel, setShowAiPanel] = useState(false)
   const [showManage, setShowManage] = useState(false)
   const [storageInfo, setStorageInfo] = useState<WhisperStorageInfo | null>(null)
-  const [liveTranscript, setLiveTranscript] = useState<TranscriptSegment[]>([])
-  const unsubRef = useRef<(() => void) | null>(null)
-  // Incremented on each new run — stale callbacks from cancelled runs check this before updating state
-  const genRef = useRef(0)
-
-  const isOverlayActive =
-    whisperProgress !== null &&
-    whisperProgress.phase !== 'done' &&
-    whisperProgress.phase !== 'error' &&
-    whisperProgress.phase !== 'idle'
-
-  // Clean up listener on unmount
-  useEffect(() => {
-    return () => { unsubRef.current?.() }
-  }, [])
 
   // Fetch storage info whenever the manage panel opens
   useEffect(() => {
@@ -110,82 +93,15 @@ export function ImportPage() {
     useProjectStore.setState({ audioFiles: sorted })
   }
 
-  async function handleGenerate() {
-    if (!audioFiles.length) return
-
-    // Cancel any in-flight transcription and its downloads/processes before starting fresh
-    ipc.whisper.cancel()
-    unsubRef.current?.()
-    unsubRef.current = null
-
-    const gen = ++genRef.current
-
-    setSubtitleSource('ai')
-    setLiveTranscript([])
-    setWhisperProgress({ phase: 'transcribing', percent: 0, message: 'Starting...' })
-
-    const unsub = ipc.whisper.onProgress((data: WhisperProgress) => {
-      if (gen !== genRef.current) return // stale callback from a cancelled run
-      if (data.text && data.segmentTimestamp) {
-        setLiveTranscript((prev) => [...prev, { timestamp: data.segmentTimestamp!, text: data.text! }])
-      }
-      setWhisperProgress(data)
-    })
-    unsubRef.current = unsub
-
-    try {
-      const resultPath = await ipc.whisper.transcribe(whisperModel, audioFiles.map((f) => f.path))
-      if (gen !== genRef.current) return // a newer run started while we were awaiting
-      setSrtPath(resultPath)
-      setWhisperProgress({ phase: 'done', percent: 100, message: 'Transcription complete!' })
-    } catch (err) {
-      if (gen !== genRef.current) return // stale error from a cancelled run — ignore
-      setWhisperProgress({
-        phase: 'error',
-        percent: 0,
-        errorMessage: err instanceof Error ? err.message : String(err)
-      })
-    } finally {
-      unsub()
-      unsubRef.current = null
-    }
-  }
-
-  function handleCancelTranscription() {
-    ipc.whisper.cancel()
-    unsubRef.current?.()
-    unsubRef.current = null
-    setWhisperProgress(null)
-    setLiveTranscript([])
-  }
-
-  function handleDismissAiResult() {
-    setWhisperProgress(null)
-    setShowAiPanel(false)
-    setLiveTranscript([])
-    if (!srtPath) setSubtitleSource('none')
-  }
-
   function handleQueueAiForConvert() {
     setSubtitleSource('ai')
     setShowAiPanel(false)
   }
 
   const totalDuration = audioFiles.reduce((s, f) => s + f.duration, 0)
-  const isDone = whisperProgress?.phase === 'done'
-  const isError = whisperProgress?.phase === 'error'
 
   return (
     <div className="flex flex-col gap-5 h-full overflow-y-auto">
-
-      {/* Full-screen transcription overlay */}
-      {isOverlayActive && whisperProgress && (
-        <TranscriptionOverlay
-          progress={whisperProgress}
-          liveTranscript={liveTranscript}
-          onCancel={handleCancelTranscription}
-        />
-      )}
 
       {/* Audio files */}
       <div>
@@ -243,7 +159,6 @@ export function ImportPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowAiPanel((v) => !v)}
-                disabled={isOverlayActive}
                 className={cn((showAiPanel || subtitleSource === 'ai') && 'text-violet-400')}
               >
                 <Sparkles size={13} />
@@ -254,13 +169,12 @@ export function ImportPage() {
               variant="ghost"
               size="sm"
               onClick={() => setShowManage((v) => !v)}
-              disabled={isOverlayActive}
               className={cn(showManage && 'text-violet-400')}
               title="Manage AI downloads"
             >
               <HardDrive size={13} />
             </Button>
-            <Button variant="ghost" size="sm" onClick={handlePickSrt} disabled={isOverlayActive}>
+            <Button variant="ghost" size="sm" onClick={handlePickSrt}>
               <FolderOpen size={13} />
               Browse
             </Button>
@@ -268,7 +182,7 @@ export function ImportPage() {
         </div>
 
         {/* AI storage management panel */}
-        {showManage && !isOverlayActive && (
+        {showManage && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 mb-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -377,8 +291,8 @@ export function ImportPage() {
           </div>
         )}
 
-        {/* AI transcription panel — shown when idle/done/error, not during active run */}
-        {(showAiPanel || isDone || isError) && !srtPath && (
+        {/* AI model selection panel */}
+        {showAiPanel && !srtPath && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 mb-3 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -386,7 +300,7 @@ export function ImportPage() {
                 <span className="text-sm font-medium text-zinc-300">AI Transcription</span>
               </div>
               <button
-                onClick={handleDismissAiResult}
+                onClick={() => setShowAiPanel(false)}
                 className="text-zinc-600 hover:text-zinc-400 transition-colors"
               >
                 <X size={14} />
@@ -394,77 +308,42 @@ export function ImportPage() {
             </div>
 
             {/* Model picker */}
-            {!isDone && !isError && (
-              <div className="grid grid-cols-2 gap-1.5">
-                {WHISPER_MODELS.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setWhisperModel(m.id as WhisperModel)}
-                    disabled={!audioFiles.length}
-                    className={cn(
-                      'flex flex-col gap-0.5 rounded-lg border p-2.5 text-left transition-all',
-                      whisperModel === m.id
-                        ? 'border-violet-500 bg-violet-500/10'
-                        : 'border-zinc-700 hover:border-zinc-600'
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={cn(
-                        'text-xs font-semibold',
-                        whisperModel === m.id ? 'text-violet-300' : 'text-zinc-300'
-                      )}>
-                        {m.name}
-                      </span>
-                      <span className="text-[10px] text-zinc-500">{m.size}</span>
-                    </div>
-                    <span className="text-[10px] text-zinc-600 leading-tight">{m.description}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Done */}
-            {isDone && (
-              <div className="flex items-center gap-2 text-green-400 text-xs">
-                <CheckCircle2 size={14} />
-                <span>Transcription complete — SRT loaded below</span>
-              </div>
-            )}
-
-            {/* Error */}
-            {isError && (
-              <div className="flex items-start gap-2 text-red-400 text-xs">
-                <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                <span className="line-clamp-3">{whisperProgress?.errorMessage ?? 'Transcription failed'}</span>
-              </div>
-            )}
-
-            {/* Generate / Try Again button */}
-            {!isDone && (
-              <>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleGenerate}
-                  disabled={!audioFiles.length}
-                  className="w-full"
+            <div className="grid grid-cols-2 gap-1.5">
+              {WHISPER_MODELS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setWhisperModel(m.id as WhisperModel)}
+                  className={cn(
+                    'flex flex-col gap-0.5 rounded-lg border p-2.5 text-left transition-all',
+                    whisperModel === m.id
+                      ? 'border-violet-500 bg-violet-500/10'
+                      : 'border-zinc-700 hover:border-zinc-600'
+                  )}
                 >
-                  <Sparkles size={13} />
-                  {isError ? 'Try Again' : 'Generate Now'}
-                </Button>
-                {!isError && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleQueueAiForConvert}
-                    disabled={!audioFiles.length}
-                    className="w-full"
-                  >
-                    Generate automatically when converting
-                  </Button>
-                )}
-              </>
-            )}
+                  <div className="flex items-center justify-between">
+                    <span className={cn(
+                      'text-xs font-semibold',
+                      whisperModel === m.id ? 'text-violet-300' : 'text-zinc-300'
+                    )}>
+                      {m.name}
+                    </span>
+                    <span className="text-[10px] text-zinc-500">{m.size}</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-600 leading-tight">{m.description}</span>
+                </button>
+              ))}
+            </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleQueueAiForConvert}
+              disabled={!audioFiles.length}
+              className="w-full"
+            >
+              <Sparkles size={13} />
+              Use AI — generate automatically when converting
+            </Button>
 
             {!audioFiles.length && (
               <p className="text-xs text-zinc-600 text-center">Add audio files first</p>
@@ -472,7 +351,7 @@ export function ImportPage() {
           </div>
         )}
 
-        {/* Manual SRT drop zone */}
+        {/* SRT drop zone / status */}
         <FileDropZone
           onFiles={(paths) => { setSrtPath(paths[0]); setSubtitleSource('manual') }}
           accept={['srt']}

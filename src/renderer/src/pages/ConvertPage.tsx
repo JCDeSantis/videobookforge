@@ -87,7 +87,7 @@ export function ConvertPage() {
     if (!outputPath) return
     setLog([])
 
-    const needsTranscription = subtitleSource === 'ai' && srtPath === null
+    const needsTranscription = subtitleSource === 'ai'
     setWillRunBothPhases(needsTranscription)
 
     let resolvedSrtPath = srtPath
@@ -179,7 +179,7 @@ export function ConvertPage() {
     setLog([])
   }
 
-  const needsTranscription = subtitleSource === 'ai' && srtPath === null
+  const needsTranscription = subtitleSource === 'ai'
   const canStart = audioFiles.length > 0 && outputPath && !isRunning
 
   // Current active progress for display
