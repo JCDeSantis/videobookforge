@@ -9,6 +9,8 @@ import { ConvertPage } from '@renderer/pages/ConvertPage'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import logo from './assets/logo.png'
 
+declare const __APP_VERSION__: string
+
 const PAGES = [ImportPage, MetadataPage, BackgroundPage, ExportSettingsPage, ConvertPage]
 const STEP_TITLES = ['Import Files', 'Metadata', 'Background', 'Export Settings', 'Convert']
 
@@ -54,6 +56,7 @@ export function App(): React.JSX.Element {
             <span className="text-zinc-500 text-xs">{STEP_TITLES[currentStep]}</span>
           </div>
         </div>
+        <span className="text-zinc-600 text-[10px] font-mono">v{__APP_VERSION__}</span>
       </div>
 
       {/* Step nav */}

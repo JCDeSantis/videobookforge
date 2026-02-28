@@ -13,7 +13,7 @@ function createWindow(): void {
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
-    title: 'VideoBook Forge',
+    title: `VideoBook Forge v${app.getVersion()}`,
     backgroundColor: '#09090b',
     icon: join(__dirname, '../../resources/icon.ico'),
     webPreferences: {
