@@ -53,7 +53,9 @@ export function ConvertPage() {
     conversionProgress,
     setWhisperProgress,
     setConversionProgress,
-    setSrtPath
+    setSubtitleSource,
+    setSrtPath,
+    resetProject
   } = useProjectStore()
 
   const [log, setLog] = useState<string[]>([])
@@ -77,6 +79,13 @@ export function ConvertPage() {
   const isDone = conversionProgress?.phase === 'done'
   const isError =
     conversionProgress?.phase === 'error' || whisperProgress?.phase === 'error'
+
+  // Auto-select AI if no subtitle source configured
+  useEffect(() => {
+    if (subtitleSource === 'none' && srtPath === null) {
+      setSubtitleSource('ai')
+    }
+  }, [])
 
   // Auto-scroll log
   useEffect(() => {
@@ -167,16 +176,12 @@ export function ConvertPage() {
 
   function handleOpenFolder() {
     if (conversionProgress?.outputPath) {
-      const dir = conversionProgress.outputPath.replace(/[/\\][^/\\]+$/, '')
-      ipc.files.showItem(dir)
+      ipc.files.showItem(conversionProgress.outputPath)
     }
   }
 
   function handleReset() {
-    setWhisperProgress(null)
-    setConversionProgress(null)
-    setWillRunBothPhases(false)
-    setLog([])
+    resetProject()
   }
 
   const needsTranscription = subtitleSource === 'ai'
@@ -326,7 +331,7 @@ export function ConvertPage() {
             Open Folder
           </Button>
           <Button variant="ghost" onClick={handleReset} className="w-full">
-            Start Over
+            Create Another
           </Button>
         </div>
       )}

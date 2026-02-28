@@ -35,6 +35,7 @@ interface ProjectStore {
   // Navigation
   currentStep: number
   setCurrentStep: (step: number) => void
+  resetProject: () => void
 
   // Step 1 — Import
   audioFiles: AudioFile[]
@@ -84,6 +85,24 @@ interface ProjectStore {
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   currentStep: 0,
   setCurrentStep: (step) => set({ currentStep: step }),
+  resetProject: () => set({
+    currentStep: 0,
+    audioFiles: [],
+    srtPath: null,
+    subtitleSource: 'none',
+    metadata: defaultMetadata,
+    coverArt: null,
+    lookupResults: [],
+    isLookingUp: false,
+    background: defaultBackground,
+    whisperModel: 'small',
+    whisperProgress: null,
+    outputFormat: 'mkv',
+    outputResolution: '1280x720',
+    outputPath: '',
+    burnSubtitles: true,
+    conversionProgress: null
+  }),
 
   // Import
   audioFiles: [],

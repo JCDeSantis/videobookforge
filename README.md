@@ -3,7 +3,7 @@
 Convert audiobook files (`.m4b`, `.mp3`) into video files (`.mkv`, `.mp4`) with cover art backgrounds, embedded metadata, chapter markers, and AI-generated or manual subtitles.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
-![Version](https://img.shields.io/badge/version-1.3.0-violet)
+![Version](https://img.shields.io/badge/version-1.3.1-violet)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -32,10 +32,8 @@ Convert audiobook files (`.m4b`, `.mp3`) into video files (`.mkv`, `.mp4`) with 
 - Powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — runs fully offline, no API key required
 - Four model sizes: **Tiny**, **Base**, **Small** (default), **Medium**
 - **GPU acceleration** — automatically downloads a CUDA build when an NVIDIA GPU is detected; falls back to CPU
-- Two generation modes:
-  - **Generate Now** — transcribe immediately and review the transcript before converting
-  - **Generate automatically when converting** — queue the model and let it run as the first phase of conversion, fully unattended
-- Live transcript display with timestamps during generation
+- **Queue & convert** — select a model on the Import step and AI transcription runs automatically as the first phase of conversion, fully unattended
+- If no subtitle source is configured on the Convert step, AI generation is auto-selected with the default model
 - AI Storage panel — view download status, GPU/CPU mode, delete engine or individual models to free disk space
 
 ### Subtitle Options
@@ -138,6 +136,7 @@ npm run build:win
 | [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react) | React fast refresh in dev |
 | [ESLint](https://eslint.org/) + [Prettier](https://prettier.io/) | Linting and formatting |
 | @electron-toolkit/\* | Electron preload helpers and tsconfig base |
+| GitHub Actions | CI/CD — automatically builds and publishes the Windows installer on tag push |
 
 ---
 
