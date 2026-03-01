@@ -42,8 +42,8 @@ const api = {
   },
 
   whisper: {
-    transcribe: (model: string, audioPaths: string[]): Promise<string> =>
-      ipcRenderer.invoke(IPC.WHISPER_TRANSCRIBE, model, audioPaths),
+    transcribe: (model: string, audioPaths: string[], promptText?: string): Promise<string> =>
+      ipcRenderer.invoke(IPC.WHISPER_TRANSCRIBE, model, audioPaths, promptText),
     cancel: (): void => { ipcRenderer.invoke(IPC.WHISPER_CANCEL) },
     checkModel: (model: string): Promise<{ modelReady: boolean; binaryReady: boolean }> =>
       ipcRenderer.invoke(IPC.WHISPER_CHECK_MODEL, model),

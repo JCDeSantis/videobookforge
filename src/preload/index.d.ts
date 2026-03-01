@@ -47,7 +47,7 @@ interface AppAPI {
     onProgress(cb: (data: ConversionProgress) => void): () => void
   }
   whisper: {
-    transcribe(model: WhisperModel, audioPaths: string[]): Promise<string>
+    transcribe(model: WhisperModel, audioPaths: string[], promptText?: string): Promise<string>
     cancel(): void
     checkModel(model: WhisperModel): Promise<{ modelReady: boolean; binaryReady: boolean }>
     storageInfo(): Promise<WhisperStorageInfo>

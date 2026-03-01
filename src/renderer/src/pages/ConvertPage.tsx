@@ -4,7 +4,7 @@ import { useProjectStore } from '@renderer/store/useProjectStore'
 import { ipc } from '@renderer/lib/ipc'
 import { cn, formatDuration, basename } from '@renderer/lib/utils'
 import { Button } from '@renderer/components/ui/button'
-import type { ConversionProgress, WhisperProgress } from '@shared/types'
+import type { ConversionProgress, WhisperProgress, EpubChapter, BookMetadata } from '@shared/types'
 
 function ProgressBar({ percent }: { percent: number }) {
   return (
@@ -22,9 +22,27 @@ function whisperPhaseLabel(phase: string): string {
     case 'downloading-binary': return 'Downloading Whisper engine...'
     case 'downloading-model': return 'Downloading model...'
     case 'preparing': return 'Preparing audio...'
+    case 'segmenting': return 'Detecting audio segments...'
     case 'transcribing': return 'Generating subtitles...'
     default: return 'Processing...'
   }
+}
+
+function extractEpubPrompt(chapters: EpubChapter[], metadata: BookMetadata): string {
+  const allText = chapters.map(c => c.text).join(' ')
+  const words = allText.match(/\b[A-Z][a-z]{2,}\b/g) ?? []
+  const freq = new Map<string, number>()
+  words.forEach(w => freq.set(w, (freq.get(w) ?? 0) + 1))
+  const properNouns = [...freq.entries()]
+    .filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 30)
+    .map(([word]) => word)
+  const parts: string[] = []
+  if (metadata.title) parts.push(`Audiobook: "${metadata.title}"`)
+  if (metadata.author) parts.push(`by ${metadata.author}`)
+  if (properNouns.length > 0) parts.push(`Names and terms: ${properNouns.join(', ')}`)
+  return parts.join('. ') + '.'
 }
 
 function conversionPhaseLabel(phase: string): string {
@@ -49,6 +67,7 @@ export function ConvertPage() {
     outputResolution,
     outputPath,
     burnSubtitles,
+    epubChapters,
     whisperProgress,
     conversionProgress,
     setWhisperProgress,
@@ -103,10 +122,15 @@ export function ConvertPage() {
       })
       unsubWhisperRef.current = unsub
 
+      const promptText = epubChapters.length > 0
+        ? extractEpubPrompt(epubChapters, metadata)
+        : undefined
+
       try {
         resolvedSrtPath = await ipc.whisper.transcribe(
           whisperModel,
-          audioFiles.map((f) => f.path)
+          audioFiles.map((f) => f.path),
+          promptText
         )
         setSrtPath(resolvedSrtPath)
       } catch (err) {

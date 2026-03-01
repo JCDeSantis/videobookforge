@@ -12,9 +12,9 @@ import type { WhisperModel } from '../../shared/types'
 import { IPC } from '../../shared/types'
 
 export function registerWhisperIpc(): void {
-  ipcMain.handle(IPC.WHISPER_TRANSCRIBE, async (event, model: WhisperModel, audioPaths: string[]) => {
+  ipcMain.handle(IPC.WHISPER_TRANSCRIBE, async (event, model: WhisperModel, audioPaths: string[], promptText?: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)!
-    return transcribeAudio(win, audioPaths, model)
+    return transcribeAudio(win, audioPaths, model, promptText)
   })
 
   ipcMain.handle(IPC.WHISPER_CANCEL, () => {

@@ -1,15 +1,17 @@
 import { spawn, ChildProcess } from 'child_process'
 import { join, dirname } from 'path'
-import { mkdirSync, createWriteStream } from 'fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { unlink } from 'fs/promises'
 import { cpus } from 'os'
 import axios from 'axios'
+import { createWriteStream } from 'fs'
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { getWhisperExe, isBinaryDownloaded, downloadBinary, isGpuEnabled } from './binary'
 import { getModelPath, getModelUrl, isModelDownloaded, getModelDir } from './models'
 import { getFfmpegPath, sumDurations } from '../ffmpeg/probe'
 import { createTempDir, createConcatListFile, cleanupTempDir } from '../ffmpeg/concat'
+import { parseSilences, buildSegments, offsetSrtContent, mergeSrts, secondsToTimestamp } from './segments'
 import type { WhisperModel, WhisperProgress } from '../../shared/types'
 import { IPC } from '../../shared/types'
 
@@ -93,7 +95,8 @@ async function downloadModel(
 export async function transcribeAudio(
   win: BrowserWindow,
   audioPaths: string[],
-  model: WhisperModel
+  model: WhisperModel,
+  promptText?: string
 ): Promise<string> {
   // Abort any previously running transcription before starting a new one
   activeAbortController?.abort()
@@ -126,67 +129,44 @@ export async function transcribeAudio(
 
     const gpuEnabled = isGpuEnabled()
 
-    // Step 3: Probe input files for total duration (used for preparing-phase progress bar)
+    // Step 3: Probe input files for total duration
     const totalDuration = await sumDurations(audioPaths)
 
     if (signal.aborted) throw new Error('Cancelled')
 
-    // Step 4: Build concat list and prepare audio.
-    // For a single file we still go through ffmpeg to ensure 16kHz mono WAV format.
-    // ffmpeg output is piped directly to whisper stdin — no temp WAV written to disk.
+    // Step 4: Build concat list and create temp directory
     tempDir = await createTempDir()
     const listPath = await createConcatListFile(audioPaths, tempDir)
+    const fullWavPath = join(tempDir, 'full.wav')
 
     const outputDir = join(app.getPath('userData'), 'whisper', 'output')
     mkdirSync(outputDir, { recursive: true })
     const srtBase = join(outputDir, `transcript_${Date.now()}`)
     const srtPath = `${srtBase}.srt`
 
-    send(win, { phase: 'preparing', percent: 0, message: 'Preparing audio...', totalDuration })
-
     const ffmpeg = getFfmpegPath()
     const whisperExe = getWhisperExe()!
     const modelPath = getModelPath(model)
     const threads = getThreadCount()
 
-    // Spawn ffmpeg writing WAV to stdout (pipe:1), whisper reads from stdin
-    const ffmpegProc = spawn(ffmpeg, [
-      '-f', 'concat', '-safe', '0', '-i', listPath,
-      '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
-      '-f', 'wav',
-      'pipe:1'                   // write WAV to stdout instead of a file
-    ])
-
-    const whisperProc = spawn(whisperExe, [
-      '-m', modelPath,
-      '-f', '-',                 // read audio from stdin
-      '-osrt',
-      '-of', srtBase,
-      '-l', 'auto',
-      '-pp',
-      '-t', String(threads)      // use all available cores (capped at 8)
-    ], {
-      cwd: dirname(whisperExe)
-    })
-
-    // Pipe ffmpeg stdout → whisper stdin
-    ffmpegProc.stdout.pipe(whisperProc.stdin)
-
-    activeProcess = whisperProc  // track for cancellation
-
-    // Wire up cancellation for both processes
-    const onAbort = (): void => {
-      ffmpegProc.kill('SIGTERM')
-      whisperProc.kill('SIGTERM')
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
+    // ── Phase: preparing ─────────────────────────────────────────────────────
+    // Convert all audio files to a single 16kHz mono WAV on disk.
+    // This enables O(1) PCM seeking during segment extraction.
+    send(win, { phase: 'preparing', percent: 0, message: 'Preparing audio...', totalDuration })
 
     await new Promise<void>((resolve, reject) => {
-      let ffmpegErr = ''
-      let whisperOut = ''
-      let txPercent = 2
+      const ffmpegProc = spawn(ffmpeg, [
+        '-hide_banner', '-y',
+        '-f', 'concat', '-safe', '0', '-i', listPath,
+        '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
+        fullWavPath
+      ])
+      activeProcess = ffmpegProc
 
-      // ffmpeg writes progress to stderr: parse time= for preparing-phase progress
+      const onAbort = (): void => { ffmpegProc.kill('SIGTERM') }
+      signal.addEventListener('abort', onAbort, { once: true })
+
+      let ffmpegErr = ''
       ffmpegProc.stderr?.on('data', (chunk: Buffer) => {
         const text = chunk.toString()
         ffmpegErr += text
@@ -201,84 +181,182 @@ export async function transcribeAudio(
       })
 
       ffmpegProc.on('close', (code) => {
-        if (code !== 0 && !signal.aborted) {
-          whisperProc.kill()
-          reject(new Error(`Audio prep failed (${code})\n${ffmpegErr.slice(-500)}`))
-        }
-        // ffmpeg done — close whisper's stdin so it knows no more input is coming
-        whisperProc.stdin?.end()
+        signal.removeEventListener('abort', onAbort)
+        activeProcess = null
+        if (signal.aborted) return
+        if (code === 0) resolve()
+        else reject(new Error(`Audio prep failed (${code})\n${ffmpegErr.slice(-500)}`))
+      })
+      ffmpegProc.on('error', reject)
+    })
+
+    if (signal.aborted) throw new Error('Cancelled')
+
+    // ── Phase: segmenting ─────────────────────────────────────────────────────
+    // Run silencedetect on the full WAV to find natural speech boundaries.
+    send(win, { phase: 'segmenting', percent: 0, message: 'Detecting audio segments...' })
+
+    const silences = await new Promise<[number, number][]>((resolve, reject) => {
+      const silProc = spawn(ffmpeg, [
+        '-hide_banner',
+        '-i', fullWavPath,
+        '-af', 'silencedetect=n=-35dB:d=1.2',
+        '-f', 'null', '-'
+      ])
+      activeProcess = silProc
+
+      const onAbort = (): void => { silProc.kill('SIGTERM') }
+      signal.addEventListener('abort', onAbort, { once: true })
+
+      let stderr = ''
+      silProc.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+
+      silProc.on('close', () => {
+        signal.removeEventListener('abort', onAbort)
+        activeProcess = null
+        resolve(parseSilences(stderr))
+      })
+      silProc.on('error', reject)
+    })
+
+    if (signal.aborted) throw new Error('Cancelled')
+
+    const segments = buildSegments(silences, totalDuration)
+    send(win, {
+      phase: 'segmenting',
+      percent: 100,
+      message: `Found ${segments.length} segment${segments.length !== 1 ? 's' : ''}`
+    })
+
+    // ── Phase: transcribing ───────────────────────────────────────────────────
+    // Transcribe each segment sequentially, offset timestamps, then merge.
+    const srtContents: string[] = []
+
+    for (const seg of segments) {
+      if (signal.aborted) throw new Error('Cancelled')
+
+      const segPad = seg.index.toString().padStart(3, '0')
+      const segWavPath = join(tempDir, `segment_${segPad}.wav`)
+      const segSrtBase = join(tempDir, `segment_${segPad}`)
+
+      // Extract segment WAV from the full PCM WAV (O(1) seek)
+      await new Promise<void>((resolve, reject) => {
+        const extractProc = spawn(ffmpeg, [
+          '-hide_banner', '-y',
+          '-ss', String(seg.startSec),
+          '-t', String(seg.durationSec),
+          '-i', fullWavPath,
+          '-c:a', 'copy',
+          segWavPath
+        ])
+        activeProcess = extractProc
+
+        const onAbort = (): void => { extractProc.kill('SIGTERM') }
+        signal.addEventListener('abort', onAbort, { once: true })
+
+        extractProc.on('close', (code) => {
+          signal.removeEventListener('abort', onAbort)
+          activeProcess = null
+          if (signal.aborted || code === 0) resolve()
+          else reject(new Error(`Segment extract failed (code ${code})`))
+        })
+        extractProc.on('error', reject)
       })
 
-      // Transition to transcribing once ffmpeg finishes (whisper starts processing)
-      send(win, { phase: 'transcribing', percent: 2, message: 'Transcribing audio...', totalDuration, useGpu: gpuEnabled })
+      if (signal.aborted) throw new Error('Cancelled')
 
-      // whisper-cli writes progress to stderr
-      whisperProc.stderr?.on('data', (chunk: Buffer) => {
-        const text = chunk.toString()
-        whisperOut += text
+      // Build whisper-cli args — force English for speed, add prompt if available
+      const whisperArgs: string[] = [
+        '-m', modelPath,
+        '-f', segWavPath,
+        '-osrt', '-of', segSrtBase,
+        '-l', 'en',       // force English — skips language detection, 10-30% faster
+        '-pp',
+        '-t', String(threads)
+      ]
+      if (promptText) whisperArgs.push('--prompt', promptText)
 
-        const progMatch = text.match(/progress\s*=\s*(\d+)%/)
-        if (progMatch) {
-          const pct = parseInt(progMatch[1], 10)
-          txPercent = 2 + Math.round(pct * 0.96)
-          const elapsed = totalDuration > 0 ? (pct / 100) * totalDuration : undefined
-          send(win, {
-            phase: 'transcribing',
-            percent: txPercent,
-            message: `Transcribing... ${pct}%`,
-            elapsed,
-            totalDuration,
-            useGpu: gpuEnabled
-          })
-        }
-      })
+      await new Promise<void>((resolve, reject) => {
+        const whisperProc = spawn(whisperExe, whisperArgs, { cwd: dirname(whisperExe) })
+        activeProcess = whisperProc
 
-      // whisper-cli writes segment text to stdout
-      const seenTimestamps = new Set<string>()
-      whisperProc.stdout?.on('data', (chunk: Buffer) => {
-        const text = chunk.toString()
-        whisperOut += text
+        const onAbort = (): void => { whisperProc.kill('SIGTERM') }
+        signal.addEventListener('abort', onAbort, { once: true })
 
-        for (const line of text.split('\n')) {
-          const segMatch = line.match(/\[([\d:.,]+)\s*-->\s*[\d:.,]+\]\s+(.+)/)
-          if (segMatch) {
-            const startTs = segMatch[1]
-            const segText = segMatch[2].trim()
-            if (segText && !seenTimestamps.has(startTs)) {
-              seenTimestamps.add(startTs)
-              const elapsed = hhmmssToSeconds(startTs.replace(',', '.'))
-              if (totalDuration > 0) {
-                txPercent = 2 + Math.min(Math.round((elapsed / totalDuration) * 96), 96)
-              }
-              const segmentTimestamp = startTs.replace(/[.,]\d+$/, '')
+        // whisper-cli writes progress to stderr
+        whisperProc.stderr?.on('data', (chunk: Buffer) => {
+          const text = chunk.toString()
+          const progMatch = text.match(/progress\s*=\s*(\d+)%/)
+          if (progMatch) {
+            const localPct = parseInt(progMatch[1], 10)
+            const overallElapsed = seg.startSec + (localPct / 100) * seg.durationSec
+            const overallPct = 2 + Math.round((overallElapsed / totalDuration) * 96)
+            send(win, {
+              phase: 'transcribing',
+              percent: overallPct,
+              message: `Transcribing... (segment ${seg.index + 1} of ${segments.length})`,
+              elapsed: overallElapsed,
+              totalDuration,
+              useGpu: gpuEnabled
+            })
+          }
+        })
+
+        // whisper-cli writes recognized text segments to stdout
+        const seenTimestamps = new Set<string>()
+        whisperProc.stdout?.on('data', (chunk: Buffer) => {
+          const text = chunk.toString()
+          for (const line of text.split('\n')) {
+            const segMatch = line.match(/\[([\d:.,]+)\s*-->\s*[\d:.,]+\]\s+(.+)/)
+            if (segMatch) {
+              const localTimestamp = segMatch[1]
+              if (seenTimestamps.has(localTimestamp)) continue
+              seenTimestamps.add(localTimestamp)
+
+              const localElapsed = hhmmssToSeconds(localTimestamp.replace(',', '.'))
+              const overallElapsed = seg.startSec + localElapsed
+              const overallPct = 2 + Math.min(Math.round((overallElapsed / totalDuration) * 96), 96)
+
               send(win, {
                 phase: 'transcribing',
-                percent: txPercent,
-                text: segText,
-                segmentTimestamp,
-                elapsed,
+                percent: overallPct,
+                text: segMatch[2].trim(),
+                segmentTimestamp: secondsToTimestamp(overallElapsed),
+                elapsed: overallElapsed,
                 totalDuration,
                 useGpu: gpuEnabled
               })
             }
           }
-        }
+        })
+
+        whisperProc.on('close', (code) => {
+          signal.removeEventListener('abort', onAbort)
+          activeProcess = null
+          if (signal.aborted) { resolve(); return }
+          if (code === 0) resolve()
+          else reject(new Error(`Whisper failed on segment ${seg.index + 1} (code ${code})`))
+        })
+        whisperProc.on('error', reject)
       })
 
-      whisperProc.on('close', (code) => {
-        signal.removeEventListener('abort', onAbort)
-        activeProcess = null
-        if (signal.aborted) return
-        if (code === 0) resolve()
-        else reject(new Error(`Whisper exited with code ${code}\n${whisperOut.slice(-1500)}`))
-      })
+      // Read offset SRT content, then delete the segment WAV immediately to free space
+      const segSrtPath = `${segSrtBase}.srt`
+      try {
+        const rawSrt = readFileSync(segSrtPath, 'utf-8')
+        srtContents.push(offsetSrtContent(rawSrt, seg.startSec))
+      } catch {
+        // Segment produced no output (e.g. silent segment) — skip it
+      }
+      await unlink(segWavPath).catch(() => {})
+    }
 
-      whisperProc.on('error', (err) => {
-        signal.removeEventListener('abort', onAbort)
-        activeProcess = null
-        reject(err)
-      })
-    })
+    // ── Merge and write final SRT ─────────────────────────────────────────────
+    const mergedSrt = mergeSrts(srtContents)
+    writeFileSync(srtPath, mergedSrt, 'utf-8')
+
+    // Clean up the full WAV (segment WAVs already deleted above)
+    await unlink(fullWavPath).catch(() => {})
 
     send(win, { phase: 'done', percent: 100, message: 'Transcription complete!', srtPath })
     return srtPath

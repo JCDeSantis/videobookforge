@@ -28,5 +28,19 @@ export const WHISPER_MODELS: WhisperModelInfo[] = [
     size: '1.5 GB',
     sizeBytes: 1533774848,
     description: 'Slow — best accuracy'
+  },
+  {
+    id: 'large-v3-turbo-q5_0',
+    name: 'Large V3 Turbo',
+    size: '547 MB',
+    sizeBytes: 573741056,
+    description: 'Best with GPU — state-of-the-art encoder, fast quantized inference'
+  },
+  {
+    id: 'large-v3-turbo',
+    name: 'Large V3 Turbo (Full)',
+    size: '1.6 GB',
+    sizeBytes: 1739146240,
+    description: 'Maximum quality — full-precision Large V3 Turbo'
   }
 ]

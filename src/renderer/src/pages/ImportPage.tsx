@@ -37,14 +37,14 @@ export function ImportPage() {
   const [showManage, setShowManage] = useState(false)
   const [storageInfo, setStorageInfo] = useState<WhisperStorageInfo | null>(null)
 
-  // Fetch storage info whenever the manage panel opens
+  // Fetch storage info whenever the manage or AI panel opens
   useEffect(() => {
-    if (showManage) {
+    if (showManage || showAiPanel) {
       ipc.whisper.storageInfo().then(setStorageInfo)
     } else {
       setStorageInfo(null)
     }
-  }, [showManage])
+  }, [showManage, showAiPanel])
 
   async function handleDeleteBinary() {
     await ipc.whisper.deleteBinary()
@@ -348,14 +348,21 @@ export function ImportPage() {
                       : 'border-zinc-700 hover:border-zinc-600'
                   )}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-1">
                     <span className={cn(
                       'text-xs font-semibold',
                       whisperModel === m.id ? 'text-violet-300' : 'text-zinc-300'
                     )}>
                       {m.name}
                     </span>
-                    <span className="text-[10px] text-zinc-500">{m.size}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(m.id === 'large-v3-turbo-q5_0' || m.id === 'large-v3-turbo') && storageInfo?.gpuEnabled && (
+                        <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/20 leading-none">
+                          GPU
+                        </span>
+                      )}
+                      <span className="text-[10px] text-zinc-500">{m.size}</span>
+                    </div>
                   </div>
                   <span className="text-[10px] text-zinc-600 leading-tight">{m.description}</span>
                 </button>

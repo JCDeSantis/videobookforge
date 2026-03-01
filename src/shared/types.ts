@@ -81,7 +81,7 @@ export interface ProbeResult {
   hasCoverArt: boolean
 }
 
-export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium'
+export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3-turbo-q5_0' | 'large-v3-turbo'
 
 export interface WhisperModelInfo {
   id: WhisperModel
@@ -96,6 +96,7 @@ export type WhisperPhase =
   | 'downloading-binary'
   | 'downloading-model'
   | 'preparing'
+  | 'segmenting'
   | 'transcribing'
   | 'done'
   | 'error'
