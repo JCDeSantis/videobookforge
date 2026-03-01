@@ -224,6 +224,12 @@ the [MIT License](https://github.com/openai/whisper/blob/main/LICENSE).
 
 ---
 
+## Built With AI
+
+Built almost entirely through AI-assisted development ([Claude Code](https://claude.ai/claude-code)). The author is not a professional developer — this project exists because AI tools made it possible.
+
+---
+
 ## License
 
 MIT
