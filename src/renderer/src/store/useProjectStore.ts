@@ -99,7 +99,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     lookupResults: [],
     isLookingUp: false,
     background: defaultBackground,
-    whisperModel: 'small',
+    whisperModel: 'large-v3-turbo-q5_0',
     whisperProgress: null,
     outputFormat: 'mkv',
     outputResolution: '1280x720',
@@ -162,7 +162,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   setBackground: (patch) => set({ background: { ...get().background, ...patch } }),
 
   // Whisper
-  whisperModel: 'small',
+  whisperModel: 'large-v3-turbo-q5_0',
   whisperProgress: null,
   setWhisperModel: (model) => set({ whisperModel: model }),
   setWhisperProgress: (progress) => set({ whisperProgress: progress }),
