@@ -7,7 +7,6 @@ import { BackgroundPage } from '@renderer/pages/BackgroundPage'
 import { ExportSettingsPage } from '@renderer/pages/ExportSettingsPage'
 import { ConvertPage } from '@renderer/pages/ConvertPage'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import logo from './assets/logo.png'
 
 declare const __APP_VERSION__: string
 
@@ -49,7 +48,6 @@ export function App(): React.JSX.Element {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-2.5 border-b border-zinc-800/60 shrink-0">
         <div className="flex items-center gap-3">
-          <img src={logo} alt="VideoBook Forge" className="w-8 h-8 rounded-md" />
           <div className="flex items-center gap-2">
             <span className="text-violet-400 font-bold text-sm tracking-tight">VideoBook Forge</span>
             <span className="text-zinc-700 text-xs">·</span>

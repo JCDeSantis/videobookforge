@@ -53,7 +53,6 @@ export function ConvertPage() {
     conversionProgress,
     setWhisperProgress,
     setConversionProgress,
-    setSubtitleSource,
     setSrtPath,
     resetProject
   } = useProjectStore()
@@ -79,13 +78,6 @@ export function ConvertPage() {
   const isDone = conversionProgress?.phase === 'done'
   const isError =
     conversionProgress?.phase === 'error' || whisperProgress?.phase === 'error'
-
-  // Auto-select AI if no subtitle source configured
-  useEffect(() => {
-    if (subtitleSource === 'none' && srtPath === null) {
-      setSubtitleSource('ai')
-    }
-  }, [])
 
   // Auto-scroll log
   useEffect(() => {
