@@ -3,7 +3,7 @@
 Convert audiobook files (`.m4b`, `.mp3`) into video files (`.mkv`, `.mp4`) with cover art backgrounds, embedded metadata, chapter markers, and AI-generated or manual subtitles.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
-![Version](https://img.shields.io/badge/version-1.3.3-violet)
+![Version](https://img.shields.io/badge/version-1.4.0-violet)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -14,6 +14,7 @@ Convert audiobook files (`.m4b`, `.mp3`) into video files (`.mkv`, `.mp4`) with 
 - Drag-and-drop `.m4b` and `.mp3` files — multi-part audiobooks fully supported
 - Drag-to-reorder parts or use **Auto-sort** (alphanumeric, numeric-aware)
 - Shows per-file duration and total runtime
+- **EPUB import** — load the book's `.epub` file to supply chapter text as vocabulary context for AI transcription
 
 ### Metadata
 - **Auto-reads embedded tags** from `.m4b` and `.mp3` files (title, author, narrator, cover art, year, genre, etc.)
@@ -30,10 +31,12 @@ Convert audiobook files (`.m4b`, `.mp3`) into video files (`.mkv`, `.mp4`) with 
 
 ### AI Subtitle Generation (whisper.cpp)
 - Powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — runs fully offline, no API key required
-- Four model sizes: **Tiny**, **Base**, **Small** (default), **Medium**
+- **Six model sizes**: Tiny, Base, Small, Medium, **Large V3 Turbo** (default, recommended), **Large V3 Turbo Full**
 - **GPU acceleration** — automatically downloads a CUDA build when an NVIDIA GPU is detected; falls back to CPU
+- **Silence-detection segmentation** — splits audio at natural speech boundaries (ffmpeg silencedetect) before transcription; segments are ≤20 minutes, preventing context drift on long audiobooks and improving accuracy
+- **Forced English** — constrains the decoder to English-only vocabulary for a 10–30% speed improvement
+- **EPUB vocabulary prompting** — when an EPUB is loaded, proper nouns and the book title/author are extracted and passed as a `--prompt` to each transcription segment, improving accuracy for character names and uncommon terms
 - **Queue & convert** — select a model on the Import step and AI transcription runs automatically as the first phase of conversion, fully unattended
-- If no subtitle source is configured on the Convert step, AI generation is auto-selected with the default model
 - AI Storage panel — view download status, GPU/CPU mode, delete engine or individual models to free disk space
 
 ### Subtitle Options
@@ -122,6 +125,7 @@ npm run build:win
 | [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) | 5 | Bundled ffmpeg binary (NVENC-capable on Windows) |
 | [ffprobe-static](https://github.com/descriptinc/ffprobe-static) | 3 | Bundled ffprobe for audio duration/tag probing |
 | [music-metadata](https://github.com/borewit/music-metadata) | 11 | Read embedded tags and cover art from `.m4b` / `.mp3` |
+| [epub2](https://github.com/julien-c/epub) | 3 | Parse `.epub` files for chapter text extraction |
 | [axios](https://axios-http.com/) | 1 | Metadata API requests (MusicBrainz, Open Library, Google Books) |
 | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | v1.8.3 | Offline AI speech-to-text (downloaded at runtime, CUDA-accelerated) |
 | class-variance-authority | — | Component variant utility |
@@ -148,6 +152,7 @@ src/
 │   ├── index.ts                   # App lifecycle, window creation
 │   ├── ipc/
 │   │   ├── conversion.ipc.ts      # convert:start, convert:cancel
+│   │   ├── epub.ipc.ts            # EPUB parsing
 │   │   ├── files.ipc.ts           # File dialogs, show-in-explorer
 │   │   ├── metadata.ipc.ts        # Tag reading, online lookup
 │   │   └── whisper.ipc.ts         # Transcription, storage management
@@ -163,11 +168,13 @@ src/
 │   │   └── googlebooks.ts         # Google Books API
 │   └── whisper/
 │       ├── binary.ts              # whisper.cpp download, GPU detection, storage
-│       └── models.ts              # Model download, transcription runner
+│       ├── models.ts              # Model list and download logic
+│       ├── segments.ts            # Silence detection and audio segmentation
+│       └── transcribe.ts          # Segmented transcription pipeline
 ├── renderer/src/
 │   ├── App.tsx                    # 5-step wizard shell + navigation
 │   ├── pages/
-│   │   ├── ImportPage.tsx         # Audio files + subtitle intent
+│   │   ├── ImportPage.tsx         # Audio files + subtitle intent + EPUB import
 │   │   ├── MetadataPage.tsx       # Tags + online lookup
 │   │   ├── BackgroundPage.tsx     # Background picker + live preview
 │   │   ├── ExportSettingsPage.tsx # Format, resolution, burn-in, output path

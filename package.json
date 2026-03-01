@@ -1,6 +1,6 @@
 {
   "name": "videobookforge",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "Convert audiobook files (.m4b, .mp3) into video files (.mkv, .mp4)",
   "main": "./out/main/index.js",
   "author": "example.com",
