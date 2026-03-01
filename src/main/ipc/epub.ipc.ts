@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import EPub from 'epub2'
+import { EPub } from 'epub2'
 import { IPC } from '../../shared/types'
 import type { EpubChapter } from '../../shared/types'
 

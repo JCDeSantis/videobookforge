@@ -7,7 +7,7 @@ export default defineConfig({
   main: {
     build: {
       rollupOptions: {
-        external: ['ffmpeg-static', 'ffprobe-static']
+        external: ['ffmpeg-static', 'ffprobe-static', 'epub2']
       }
     }
   },
