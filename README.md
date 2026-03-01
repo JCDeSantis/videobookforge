@@ -3,7 +3,7 @@
 Convert audiobook files (`.m4b`, `.mp3`) into video files (`.mkv`, `.mp4`) with cover art backgrounds, embedded metadata, chapter markers, and AI-generated or manual subtitles.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
-![Version](https://img.shields.io/badge/version-1.4.0-violet)
+![Version](https://img.shields.io/badge/version-1.4.0-red)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
