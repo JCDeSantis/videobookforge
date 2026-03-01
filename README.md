@@ -199,6 +199,31 @@ src/
 
 ---
 
+## Third-Party Software
+
+VideoBookForge bundles or downloads the following third-party components at runtime:
+
+### FFmpeg
+This application uses [FFmpeg](https://ffmpeg.org/), which is licensed under the
+[GNU Lesser General Public License (LGPL) v2.1](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
+or later. The Windows build distributed via `ffmpeg-static` includes components (such as libx264)
+that are licensed under the [GNU General Public License (GPL) v2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
+or later, which governs the combined binary. FFmpeg source code is available at
+[https://ffmpeg.org/download.html](https://ffmpeg.org/download.html).
+
+VideoBookForge does not modify FFmpeg. Its source code is available at
+[https://github.com/JCDeSantis/videobookforge](https://github.com/JCDeSantis/videobookforge).
+
+### whisper.cpp
+This application downloads [whisper.cpp](https://github.com/ggerganov/whisper.cpp) at runtime,
+which is licensed under the [MIT License](https://github.com/ggerganov/whisper.cpp/blob/master/LICENSE).
+
+### OpenAI Whisper Models
+The AI model weights downloaded by this application were created by OpenAI and are distributed under
+the [MIT License](https://github.com/openai/whisper/blob/main/LICENSE).
+
+---
+
 ## License
 
 MIT
