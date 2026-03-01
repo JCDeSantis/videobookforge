@@ -8,7 +8,8 @@ import type {
   ConversionProgress,
   WhisperModel,
   WhisperProgress,
-  SubtitleSource
+  SubtitleSource,
+  EpubChapter
 } from '@shared/types'
 
 const defaultMetadata: BookMetadata = {
@@ -41,12 +42,14 @@ interface ProjectStore {
   audioFiles: AudioFile[]
   srtPath: string | null
   subtitleSource: SubtitleSource
+  epubChapters: EpubChapter[]
   setAudioFiles: (files: AudioFile[]) => void
   addAudioFiles: (files: AudioFile[]) => void
   removeAudioFile: (id: string) => void
   reorderAudioFiles: (activeId: string, overId: string) => void
   setSrtPath: (path: string | null) => void
   setSubtitleSource: (source: SubtitleSource) => void
+  setEpubChapters: (chapters: EpubChapter[]) => void
 
   // Step 2 — Metadata
   metadata: BookMetadata
@@ -90,6 +93,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     audioFiles: [],
     srtPath: null,
     subtitleSource: 'none',
+    epubChapters: [],
     metadata: defaultMetadata,
     coverArt: null,
     lookupResults: [],
@@ -108,6 +112,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   audioFiles: [],
   srtPath: null,
   subtitleSource: 'none',
+  epubChapters: [],
   setAudioFiles: (files) => set({ audioFiles: files }),
   addAudioFiles: (incoming) => {
     const existing = get().audioFiles
@@ -128,6 +133,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
   setSrtPath: (path) => set({ srtPath: path }),
   setSubtitleSource: (source) => set({ subtitleSource: source }),
+  setEpubChapters: (chapters) => set({ epubChapters: chapters }),
 
   // Metadata
   metadata: defaultMetadata,

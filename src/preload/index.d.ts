@@ -10,7 +10,8 @@ import type {
   ConversionOptions,
   WhisperModel,
   WhisperProgress,
-  WhisperStorageInfo
+  WhisperStorageInfo,
+  EpubChapter
 } from '../shared/types'
 
 interface ConvertStartPayload {
@@ -53,6 +54,9 @@ interface AppAPI {
     deleteBinary(): Promise<void>
     deleteModel(model: WhisperModel): Promise<void>
     onProgress(cb: (data: WhisperProgress) => void): () => void
+  }
+  epub: {
+    parse(epubPath: string): Promise<EpubChapter[]>
   }
 }
 

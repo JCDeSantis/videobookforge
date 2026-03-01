@@ -58,6 +58,11 @@ const api = {
       ipcRenderer.on(IPC.WHISPER_PROGRESS, handler)
       return () => ipcRenderer.removeListener(IPC.WHISPER_PROGRESS, handler)
     }
+  },
+
+  epub: {
+    parse: (epubPath: string): Promise<{ title: string; text: string }[]> =>
+      ipcRenderer.invoke(IPC.EPUB_PARSE, epubPath)
   }
 }
 

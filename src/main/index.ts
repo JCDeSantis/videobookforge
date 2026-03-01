@@ -4,6 +4,7 @@ import { registerFilesIpc } from './ipc/files.ipc'
 import { registerMetadataIpc } from './ipc/metadata.ipc'
 import { registerConversionIpc } from './ipc/conversion.ipc'
 import { registerWhisperIpc } from './ipc/whisper.ipc'
+import { registerEpubIpc } from './ipc/epub.ipc'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -45,6 +46,7 @@ app.whenReady().then(() => {
   registerMetadataIpc()
   registerConversionIpc()
   registerWhisperIpc()
+  registerEpubIpc()
 
   createWindow()
 

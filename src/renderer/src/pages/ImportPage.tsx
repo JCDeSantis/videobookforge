@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FolderOpen, FileText, Music, SortAsc, Sparkles, X, AlertTriangle, HardDrive, Trash2 } from 'lucide-react'
+import { FolderOpen, FileText, Music, SortAsc, Sparkles, X, AlertTriangle, HardDrive, Trash2, BookOpen } from 'lucide-react'
 import { useProjectStore } from '@renderer/store/useProjectStore'
 import { ipc } from '@renderer/lib/ipc'
 import { basename, formatDuration, cn } from '@renderer/lib/utils'
@@ -27,9 +27,9 @@ async function buildAudioFile(path: string): Promise<AudioFile> {
 
 export function ImportPage() {
   const {
-    audioFiles, srtPath, subtitleSource,
+    audioFiles, srtPath, subtitleSource, epubChapters,
     addAudioFiles, removeAudioFile, reorderAudioFiles, setSrtPath, setSubtitleSource,
-    whisperModel, setWhisperModel
+    setEpubChapters, whisperModel, setWhisperModel
   } = useProjectStore()
 
   const [loading, setLoading] = useState(false)
@@ -96,6 +96,34 @@ export function ImportPage() {
   function handleQueueAiForConvert() {
     setSubtitleSource('ai')
     setShowAiPanel(false)
+  }
+
+  const [epubLoading, setEpubLoading] = useState(false)
+  const [epubPath, setEpubPath] = useState<string | null>(null)
+
+  async function handleEpubDrop(paths: string[]) {
+    if (!paths[0]) return
+    setEpubLoading(true)
+    try {
+      const chapters = await ipc.epub.parse(paths[0])
+      setEpubChapters(chapters)
+      setEpubPath(paths[0])
+    } finally {
+      setEpubLoading(false)
+    }
+  }
+
+  async function handlePickEpub() {
+    const paths = await ipc.files.openDialog({
+      title: 'Select EPUB File',
+      filters: [{ name: 'EPUB Files', extensions: ['epub'] }]
+    })
+    if (paths.length) await handleEpubDrop(paths)
+  }
+
+  function handleRemoveEpub() {
+    setEpubChapters([])
+    setEpubPath(null)
   }
 
   const totalDuration = audioFiles.reduce((s, f) => s + f.duration, 0)
@@ -395,6 +423,53 @@ export function ImportPage() {
               <p className="text-sm text-zinc-500">
                 Drop a <span className="text-zinc-400">.srt</span> file here
               </p>
+            </div>
+          )}
+        </FileDropZone>
+      </div>
+
+      {/* EPUB */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+            <BookOpen size={15} className="text-violet-400" />
+            EPUB
+            <span className="text-xs text-zinc-500 font-normal">(optional — enables fast text alignment)</span>
+          </h2>
+          <Button variant="ghost" size="sm" onClick={handlePickEpub} disabled={epubLoading}>
+            <FolderOpen size={13} />
+            Browse
+          </Button>
+        </div>
+
+        <FileDropZone onFiles={handleEpubDrop} accept={['epub']} className="p-4">
+          {epubLoading ? (
+            <div className="flex flex-col items-center gap-1.5 py-3">
+              <p className="text-sm text-zinc-500">Reading EPUB...</p>
+            </div>
+          ) : epubChapters.length > 0 && epubPath ? (
+            <div className="flex items-center gap-3 py-1">
+              <BookOpen size={16} className="text-violet-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-zinc-200 truncate">{basename(epubPath)}</p>
+                <p className="text-xs text-zinc-500">{epubChapters.length} chapter{epubChapters.length !== 1 ? 's' : ''} extracted</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); handleRemoveEpub() }}
+                className="text-zinc-600 hover:text-red-400"
+              >
+                Remove
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5 py-3">
+              <BookOpen size={20} className="text-zinc-700" />
+              <p className="text-sm text-zinc-500">
+                Drop an <span className="text-zinc-400">.epub</span> file here
+              </p>
+              <p className="text-xs text-zinc-600">Enables faster subtitle generation via text alignment</p>
             </div>
           )}
         </FileDropZone>

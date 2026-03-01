@@ -126,6 +126,11 @@ export interface WhisperStorageInfo {
   }>
 }
 
+export interface EpubChapter {
+  title: string
+  text: string
+}
+
 export const IPC = {
   FILES_OPEN_DIALOG: 'files:open-dialog',
   FILES_CHECK_EXISTS: 'files:check-exists',
@@ -144,4 +149,5 @@ export const IPC = {
   WHISPER_STORAGE_INFO: 'whisper:storage-info',
   WHISPER_DELETE_BINARY: 'whisper:delete-binary',
   WHISPER_DELETE_MODEL: 'whisper:delete-model',
+  EPUB_PARSE: 'epub:parse',
 } as const

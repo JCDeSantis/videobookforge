@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { FolderOpen, Film, Tv, Flame } from 'lucide-react'
+import { FolderOpen, Film, Tv, Flame, BookOpen } from 'lucide-react'
 import { useProjectStore } from '@renderer/store/useProjectStore'
 import { ipc } from '@renderer/lib/ipc'
 import { cn, formatDuration, basename } from '@renderer/lib/utils'
@@ -30,6 +30,7 @@ export function ExportSettingsPage() {
     audioFiles,
     srtPath,
     subtitleSource,
+    epubChapters,
     metadata,
     background,
     outputFormat,
@@ -226,6 +227,15 @@ export function ExportSettingsPage() {
                 }
               </span>
             </div>
+            {epubChapters.length > 0 && (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-zinc-500 text-xs">EPUB</span>
+                <span className="text-violet-400 flex items-center gap-1">
+                  <BookOpen size={11} />
+                  {epubChapters.length} chapter{epubChapters.length !== 1 ? 's' : ''} loaded
+                </span>
+              </div>
+            )}
             <div className="flex flex-col gap-0.5">
               <span className="text-zinc-500 text-xs">Background</span>
               <span className="text-zinc-300 capitalize">{background.type}</span>
